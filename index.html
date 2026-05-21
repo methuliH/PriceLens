@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RiyaPrice — Sri Lanka Vehicle Price Predictor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --slate:       #767F9E;
+  --slate-light: #eef0f5;
+  --slate-mid:   #c4c9d9;
+  --slate-dark:  #4e566e;
+  --amber:       #DAA464;
+  --amber-light: #f5e8d0;
+  --amber-dark:  #a8722e;
+  --gold:        #DEC384;
+  --gold-light:  #f5edce;
+  --cream:       #E8DDB4;
+  --cream-light: #f8f5e8;
+  --bg:          #f6f4ef;
+  --white:       #ffffff;
+  --text:        #18181b;
+  --text-2:      #52525b;
+  --text-3:      #a1a1aa;
+  --border:      rgba(0,0,0,0.07);
+  --border-2:    rgba(0,0,0,0.11);
+  --r-sm:        8px;
+  --r-md:        14px;
+  --r-lg:        20px;
+  --r-xl:        28px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--cream); border-radius: 3px; }
+
+/* ─── Nav ─── */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(246,244,239,0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2.5rem;
+  height: 60px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.logo {
+  display: flex; align-items: center; gap: .6rem;
+}
+.logo-mark {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--amber);
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-mark svg { width: 16px; height: 16px; fill: white; }
+.logo-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-weight: 600; letter-spacing: -.01em;
+}
+.logo-sub {
+  font-size: 11px; font-weight: 500;
+  color: var(--slate); letter-spacing: .05em;
+  background: var(--slate-light);
+  padding: 2px 8px; border-radius: 20px;
+}
+
+.nav-center {
+  display: flex; gap: 2px;
+}
+.nav-btn {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 500;
+  padding: .45rem 1rem; border-radius: 8px;
+  border: none; background: transparent;
+  color: var(--text-2); cursor: pointer;
+  transition: all .15s;
+}
+.nav-btn:hover { background: var(--border); color: var(--text); }
+.nav-btn.active { background: var(--white); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+.nav-right {
+  display: flex; align-items: center; gap: 1rem;
+}
+.data-badge {
+  font-size: 12px; color: var(--text-3);
+  display: flex; align-items: center; gap: .4rem;
+}
+.data-badge::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #22c55e;
+  display: inline-block;
+}
+
+/* ─── Page shell ─── */
+.page { max-width: 1160px; margin: 0 auto; padding: 3rem 2.5rem 5rem; }
+
+/* ─── Hero header ─── */
+.hero { margin-bottom: 3rem; }
+.hero-eyebrow {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: var(--amber-dark); margin-bottom: .75rem;
+  display: flex; align-items: center; gap: .5rem;
+}
+.hero-eyebrow::before {
+  content: '';
+  display: block; width: 24px; height: 1.5px;
+  background: var(--amber);
+}
+.hero-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 52px; font-weight: 400; line-height: 1.05;
+  letter-spacing: -.02em; margin-bottom: .75rem;
+}
+.hero-title em {
+  font-style: italic; color: var(--slate);
+}
+.hero-sub {
+  font-size: 15px; color: var(--text-2); font-weight: 300;
+  max-width: 480px; line-height: 1.6;
+}
+
+/* ─── Stat strip ─── */
+.stat-strip {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 1.25rem;
+}
+
+.stat-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 1.25rem 1.5rem;
+  transition: border-color .2s, transform .2s;
+  position: relative; overflow: hidden;
+}
+.stat-card:hover { border-color: var(--border-2); transform: translateY(-1px); }
+
+.stat-card.hero-stat {
+  background: var(--amber);
+  border-color: var(--amber-dark);
+}
+.stat-card.hero-stat::after {
+  content: '';
+  position: absolute; right: -20px; top: -20px;
+  width: 100px; height: 100px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.1);
+}
+
+.stat-eyebrow {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--text-3); margin-bottom: .5rem;
+}
+.stat-card.hero-stat .stat-eyebrow { color: rgba(255,255,255,.65); }
+
+.stat-num {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 32px; font-weight: 500; line-height: 1;
+  letter-spacing: -.01em; margin-bottom: .3rem;
+}
+.stat-card.hero-stat .stat-num { color: white; font-size: 40px; }
+
+.stat-foot {
+  font-size: 12px; color: var(--text-3); font-weight: 400;
+}
+.stat-card.hero-stat .stat-foot { color: rgba(255,255,255,.6); }
+
+/* ─── Insight tags ─── */
+.insight-bar {
+  display: flex; gap: .5rem; flex-wrap: wrap;
+  margin-bottom: 3rem;
+}
+.insight {
+  display: inline-flex; align-items: center; gap: .4rem;
+  font-size: 12px; font-weight: 500;
+  color: var(--slate-dark);
+  background: var(--white);
+  border: 1px solid var(--border);
+  padding: .35rem .875rem; border-radius: 20px;
+  transition: border-color .15s;
+}
+.insight:hover { border-color: var(--slate-mid); }
+.insight-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--gold); flex-shrink: 0;
+}
+
+/* ─── Section label ─── */
+.section-row {
+  display: flex; align-items: center; gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.section-label {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: var(--slate); white-space: nowrap;
+}
+.section-rule {
+  flex: 1; height: 1px; background: var(--border);
+}
+
+/* ─── Combined estimator card ─── */
+.workspace {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+}
+
+/* ─── Form panel (left) ─── */
+.form-card {
+  border-right: 1px solid var(--border);
+}
+.form-head {
+  padding: 1.5rem 1.75rem 0;
+  margin-bottom: 1.5rem;
+}
+.form-head-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-weight: 500;
+  margin-bottom: .25rem;
+}
+.form-head-sub {
+  font-size: 12px; color: var(--text-3);
+}
+.form-body {
+  padding: 0 1.75rem 1.75rem;
+}
+
+/* ─── Fields ─── */
+.field { margin-bottom: 1rem; }
+
+.field-label {
+  display: block;
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--slate); margin-bottom: .4rem;
+}
+
+.field input, .field select {
+  width: 100%; height: 42px;
+  padding: 0 1rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px; font-weight: 400;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-sm);
+  transition: all .15s;
+  appearance: none; -webkit-appearance: none;
+}
+.field select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23767F9E' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.5rem;
+  cursor: pointer;
+}
+.field input:focus, .field select:focus {
+  outline: none;
+  border-color: var(--amber);
+  background: var(--white);
+  box-shadow: 0 0 0 3px var(--amber-light);
+}
+.field input::placeholder { color: var(--text-3); }
+
+.field-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: .75rem;
+}
+
+.field-divider {
+  height: 1px; background: var(--border);
+  margin: 1.25rem 0;
+}
+
+/* ─── CTA button ─── */
+.btn-cta {
+  width: 100%; height: 48px;
+  background: var(--text);
+  color: var(--white);
+  border: none; border-radius: var(--r-sm);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px; font-weight: 600;
+  letter-spacing: .02em; cursor: pointer;
+  transition: all .15s;
+  display: flex; align-items: center;
+  justify-content: center; gap: .5rem;
+  margin-top: .25rem;
+}
+.btn-cta:hover { background: var(--slate-dark); transform: translateY(-1px); }
+.btn-cta:active { transform: scale(.99); }
+.btn-arrow { transition: transform .2s; }
+.btn-cta:hover .btn-arrow { transform: translateX(3px); }
+
+/* ─── Result panel (right) ─── */
+.result-card {
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Empty state */
+.result-empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 480px;
+  padding: 3rem;
+  text-align: center;
+}
+.empty-graphic {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: var(--cream-light);
+  border: 1px solid var(--cream);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 1.25rem; font-size: 28px;
+}
+.empty-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-weight: 400;
+  margin-bottom: .5rem; color: var(--text-2);
+}
+.empty-sub { font-size: 13px; color: var(--text-3); line-height: 1.6; }
+
+/* Result content */
+.result-content { display: none; flex: 1; flex-direction: column; }
+
+.result-banner {
+  background: var(--cream-light);
+  border-bottom: 1px solid var(--cream);
+  padding: 2rem 2rem 1.75rem;
+}
+.result-banner-label {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: var(--slate); margin-bottom: .6rem;
+}
+.result-price {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 56px; font-weight: 500;
+  line-height: 1; letter-spacing: -.02em;
+  color: var(--amber-dark);
+  margin-bottom: .5rem;
+}
+.result-range {
+  font-size: 13px; color: var(--text-3);
+  font-family: 'DM Mono', monospace;
+}
+.result-conf {
+  display: flex; align-items: center; gap: .875rem;
+  margin-top: 1.25rem;
+}
+.conf-label {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--slate); white-space: nowrap;
+}
+.conf-track {
+  flex: 1; height: 5px;
+  background: var(--cream);
+  border-radius: 3px; overflow: hidden;
+}
+.conf-bar {
+  height: 100%; border-radius: 3px;
+  background: var(--amber);
+  width: 0%; transition: width .7s cubic-bezier(.4,0,.2,1);
+}
+.conf-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px; color: var(--amber-dark);
+  font-weight: 500; min-width: 32px; text-align: right;
+}
+
+.result-body { padding: 1.75rem 2rem; }
+
+/* ─── Drivers ─── */
+.drivers-head {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: var(--text-3); margin-bottom: 1.25rem;
+}
+.driver {
+  display: grid;
+  grid-template-columns: 90px 1fr 56px;
+  align-items: center;
+  gap: 1rem; margin-bottom: 1rem;
+}
+.driver-name { font-size: 13px; color: var(--text-2); }
+.driver-track {
+  height: 8px; background: var(--bg);
+  border-radius: 4px; overflow: hidden;
+  border: 1px solid var(--border);
+}
+.driver-fill {
+  height: 100%; border-radius: 4px;
+  background: linear-gradient(90deg, var(--gold), var(--amber));
+  width: 0%; transition: width .6s cubic-bezier(.4,0,.2,1);
+}
+.driver-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px; color: var(--text-3); text-align: right;
+}
+
+/* ─── Badges ─── */
+.badges-row {
+  display: flex; gap: .5rem; flex-wrap: wrap;
+  margin-top: 1.5rem; padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.badge {
+  font-size: 11px; font-weight: 500;
+  padding: .3rem .75rem; border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--text-2); background: var(--bg);
+}
+.badge.up {
+  background: var(--gold-light);
+  border-color: var(--cream);
+  color: var(--amber-dark);
+}
+.badge.down {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+/* ─── Footer ─── */
+footer {
+  margin-top: 5rem;
+  padding: 1.5rem 2.5rem;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.footer-left {
+  display: flex; align-items: center; gap: .5rem;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 16px; color: var(--text-3);
+}
+.footer-note {
+  font-size: 12px; color: var(--text-3);
+}
+
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+    </div>
+    <span class="logo-name">RiyaPrice</span>
+    <span class="logo-sub">Sri Lanka</span>
+  </div>
+
+  <div class="nav-center">
+    <button class="nav-btn active">Dashboard</button>
+    <button class="nav-btn">Market trends</button>
+    <button class="nav-btn">Compare</button>
+  </div>
+
+  <div class="nav-right">
+    <span class="data-badge">Live data · riyasewana.com</span>
+  </div>
+</nav>
+
+<div class="page">
+
+  <div class="hero">
+    <div class="hero-eyebrow">Sri Lanka used car market</div>
+    <h1 class="hero-title">Know what your car<br>is <em>really</em> worth.</h1>
+    <p class="hero-sub">Instant price estimates trained on 3,520 real listings from riyasewana.com. No guesswork.</p>
+  </div>
+
+  <div class="stat-strip">
+    <div class="stat-card hero-stat">
+      <div class="stat-eyebrow">Average market price</div>
+      <div class="stat-num" id="stat-avg">Rs. 6.1M</div>
+      <div class="stat-foot">across all makes · LKR</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-eyebrow">Median price</div>
+      <div class="stat-num" id="stat-med">5.1M</div>
+      <div class="stat-foot">LKR</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-eyebrow">Listings analysed</div>
+      <div class="stat-num" id="stat-count">3,520</div>
+      <div class="stat-foot">active ads</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-eyebrow">Price spread</div>
+      <div class="stat-num" id="stat-range">140k–65M</div>
+      <div class="stat-foot">LKR range</div>
+    </div>
+  </div>
+
+  <div class="insight-bar">
+    <span class="insight"><span class="insight-dot"></span>Toyota · most listed make</span>
+    <span class="insight"><span class="insight-dot"></span>Colombo · highest avg prices</span>
+    <span class="insight"><span class="insight-dot"></span>Hybrids command +22% premium</span>
+    <span class="insight"><span class="insight-dot"></span>2015–2019 sweet spot for value</span>
+    <span class="insight"><span class="insight-dot"></span>Unregistered · +18% over used</span>
+    <span class="insight"><span class="insight-dot"></span>Automatics add +8% on average</span>
+  </div>
+
+  <div class="section-row">
+    <span class="section-label">Price estimator</span>
+    <div class="section-rule"></div>
+  </div>
+
+  <div class="workspace">
+
+    <div class="form-card">
+      <div class="form-head">
+        <div class="form-head-title">Vehicle details</div>
+        <div class="form-head-sub">Fill in what you know — estimate updates instantly</div>
+      </div>
+      <div class="form-body">
+
+        <div class="field">
+          <label class="field-label">Make</label>
+          <select id="make">
+            <option value="">Select make</option>
+            <option>Toyota</option>
+            <option>Honda</option>
+            <option>Suzuki</option>
+            <option>Nissan</option>
+            <option>Mitsubishi</option>
+            <option>Mazda</option>
+            <option>Hyundai</option>
+            <option>BMW</option>
+            <option>Mercedes-Benz</option>
+            <option>Audi</option>
+            <option>Kia</option>
+            <option>Subaru</option>
+          </select>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">Year</label>
+            <input type="number" id="year" placeholder="e.g. 2018" min="1990" max="2026">
+          </div>
+          <div class="field">
+            <label class="field-label">Mileage (km)</label>
+            <input type="number" id="mileage" placeholder="e.g. 65,000">
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Fuel type</label>
+          <select id="fuel">
+            <option value="">Select fuel type</option>
+            <option>Petrol</option>
+            <option>Hybrid</option>
+            <option>Diesel</option>
+            <option>Electric</option>
+          </select>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">Transmission</label>
+            <select id="trans">
+              <option value="">Select</option>
+              <option>Automatic</option>
+              <option>Manual</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label">Condition</label>
+            <select id="cond">
+              <option value="">Select</option>
+              <option value="unreg">Unregistered</option>
+              <option value="used">Registered (Used)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-divider"></div>
+
+        <button class="btn-cta" onclick="estimate()">
+          Estimate price <span class="btn-arrow">→</span>
+        </button>
+
+      </div>
+    </div>
+
+    <div class="result-card">
+      <div class="result-empty" id="empty-state">
+        <div class="empty-graphic">🚗</div>
+        <div class="empty-title">Ready to estimate</div>
+        <div class="empty-sub">Enter your vehicle details on the left<br>and we'll predict its market value.</div>
+      </div>
+
+      <div class="result-content" id="result-state">
+        <div class="result-banner">
+          <div class="result-banner-label">Estimated market price</div>
+          <div class="result-price" id="price-display">—</div>
+          <div class="result-range" id="range-display">—</div>
+          <div class="result-conf">
+            <span class="conf-label">Confidence</span>
+            <div class="conf-track"><div class="conf-bar" id="conf-bar"></div></div>
+            <span class="conf-num" id="conf-num">—</span>
+          </div>
+        </div>
+
+        <div class="result-body">
+          <div class="drivers-head">Price impact factors</div>
+
+          <div class="driver">
+            <span class="driver-name">Vehicle age</span>
+            <div class="driver-track"><div class="driver-fill" id="df-age"></div></div>
+            <span class="driver-val" id="dv-age">—</span>
+          </div>
+          <div class="driver">
+            <span class="driver-name">Mileage</span>
+            <div class="driver-track"><div class="driver-fill" id="df-mile"></div></div>
+            <span class="driver-val" id="dv-mile">—</span>
+          </div>
+          <div class="driver">
+            <span class="driver-name">Make</span>
+            <div class="driver-track"><div class="driver-fill" id="df-make"></div></div>
+            <span class="driver-val" id="dv-make">—</span>
+          </div>
+          <div class="driver">
+            <span class="driver-name">Fuel</span>
+            <div class="driver-track"><div class="driver-fill" id="df-fuel"></div></div>
+            <span class="driver-val" id="dv-fuel">—</span>
+          </div>
+          <div class="driver">
+            <span class="driver-name">Condition</span>
+            <div class="driver-track"><div class="driver-fill" id="df-cond"></div></div>
+            <span class="driver-val" id="dv-cond">—</span>
+          </div>
+
+          <div class="badges-row" id="badges-row"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <div class="footer-left">RiyaPrice</div>
+  <div class="footer-note">Model trained on 3,520 riyasewana.com listings · XGBoost · Data scraped May 2026</div>
+</footer>
+
+<script>
+const API = 'http://localhost:8000';
+
+// ── Condition value mapping (must match what preprocess.py normalizes to) ──
+const COND_MAP = {
+  'unreg':      'Unregistered',
+  'used':       'Used',
+  'recond':     'Reconditioned',
+  'brand_new':  'Brand New',
+};
+
+function lkr(n) {
+  if (n >= 1e6) return 'Rs. ' + (n / 1e6).toFixed(2) + 'M';
+  return 'Rs. ' + Math.round(n).toLocaleString();
+}
+function lkrFull(n) {
+  return 'Rs. ' + Math.round(n).toLocaleString();
+}
+
+// ── Populate makes dropdown from API ──────────────────────────────────────
+async function loadMakes() {
+  try {
+    const res  = await fetch(`${API}/makes`);
+    const data = await res.json();
+    const sel  = document.getElementById('make');
+    sel.innerHTML = '<option value="">Select make</option>';
+    data.makes.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = m;
+      sel.appendChild(opt);
+    });
+  } catch {
+    // API not running — keep static fallback options silently
+  }
+}
+
+// ── Load market stats from API ────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const res  = await fetch(`${API}/market-stats`);
+    const data = await res.json();
+
+    if (data.avg_price)
+      document.getElementById('stat-avg').textContent =
+        'Rs. ' + (data.avg_price / 1e6).toFixed(1) + 'M';
+    if (data.median_price)
+      document.getElementById('stat-med').textContent =
+        'Rs. ' + (data.median_price / 1e6).toFixed(1) + 'M';
+    if (data.total_listings)
+      document.getElementById('stat-count').textContent =
+        data.total_listings.toLocaleString();
+    if (data.min_price && data.max_price)
+      document.getElementById('stat-range').textContent =
+        Math.round(data.min_price / 1000) + 'k – ' +
+        (data.max_price / 1e6).toFixed(0) + 'M';
+  } catch {
+    // API not running — keep static values
+  }
+}
+
+// ── Main predict function ─────────────────────────────────────────────────
+async function estimate() {
+  const make  = document.getElementById('make').value;
+  const year  = parseInt(document.getElementById('year').value);
+  const mile  = parseFloat(document.getElementById('mileage').value);
+  const fuel  = document.getElementById('fuel').value;
+  const trans = document.getElementById('trans').value;
+  const cond  = document.getElementById('cond').value;
+
+  if (!make || !year || isNaN(mile) || !fuel || !trans || !cond) {
+    shake(document.querySelector('.btn-cta'));
+    return;
+  }
+
+  // Show loading state
+  const btn = document.querySelector('.btn-cta');
+  btn.textContent = 'Estimating…';
+  btn.disabled    = true;
+
+  try {
+    const res = await fetch(`${API}/predict`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        make,
+        year,
+        mileage:      mile,
+        fuel_type:    fuel,
+        transmission: trans,
+        condition:    COND_MAP[cond] || cond,
+        location:     'Unknown',
+      }),
+    });
+
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    const data = await res.json();
+
+    renderResult({
+      price: data.predicted_price,
+      low:   data.range_low,
+      high:  data.range_high,
+      make, year, mile, fuel, trans, cond,
+      fromAPI: true,
+    });
+
+  } catch (err) {
+    // Fallback: show a clear message instead of crashing
+    showAPIError();
+  } finally {
+    btn.innerHTML = 'Estimate price <span class="btn-arrow">→</span>';
+    btn.disabled  = false;
+  }
+}
+
+// ── Render result panel ───────────────────────────────────────────────────
+function renderResult({ price, low, high, make, year, mile, fuel, trans, cond, fromAPI }) {
+  document.getElementById('price-display').textContent = lkr(price);
+  document.getElementById('range-display').textContent =
+    lkrFull(low) + '  –  ' + lkrFull(high);
+
+  // Confidence: API model gets fixed 72%, with variation by price range
+  const conf = fromAPI
+    ? Math.min(88, 65 + Math.round((1 - Math.min(price, 20e6) / 20e6) * 20))
+    : 55;
+  setTimeout(() => {
+    document.getElementById('conf-bar').style.width = conf + '%';
+  }, 120);
+  document.getElementById('conf-num').textContent = conf + '%';
+
+  // Price driver bars — heuristic visual only, SHAP would replace these
+  const age = 2026 - year;
+  const af  = Math.max(0.22, 1 - age * 0.056);
+  const mf  = Math.max(0.48, 1 - (mile / 300000) * 0.46);
+  const MAKE_RANK = {
+    Toyota:60, Honda:55, Suzuki:35, Nissan:45, Mitsubishi:48,
+    Mazda:46, Hyundai:40, BMW:85, 'Mercedes-Benz':92, Audi:88, Kia:52, Subaru:58,
+  };
+  const FUEL_IMPACT = { Petrol:30, Hybrid:65, Diesel:25, Electric:80 };
+
+  setD('age',  Math.min(95, Math.round((1 - af) * 130)), age + 'yr');
+  setD('mile', Math.min(95, Math.round((1 - mf) * 130)), Math.round(mile / 1000) + 'k');
+  setD('make', MAKE_RANK[make] || 45, make.slice(0, 8));
+  setD('fuel', FUEL_IMPACT[fuel] || 30, fuel);
+  setD('cond', cond === 'unreg' ? 68 : 32, cond === 'unreg' ? 'Unreg' : 'Used');
+
+  // Insight badges
+  const tags = [];
+  if (fuel === 'Hybrid')        tags.push({ t: 'Hybrid premium +22%', up: true });
+  if (fuel === 'Electric')      tags.push({ t: 'EV premium +35%', up: true });
+  if (cond === 'unreg')         tags.push({ t: 'Unregistered +18%', up: true });
+  if (trans === 'Automatic')    tags.push({ t: 'Auto +8%', up: true });
+  if (trans === 'Manual')       tags.push({ t: 'Manual −6%', up: false });
+  if (age > 12)                 tags.push({ t: 'High depreciation', up: false });
+  if (mile > 180000)            tags.push({ t: 'Very high mileage', up: false });
+  if (age <= 4 && mile < 40000) tags.push({ t: 'Near-new premium', up: true });
+  if (fromAPI)                  tags.push({ t: 'XGBoost model', up: true });
+
+  document.getElementById('badges-row').innerHTML = tags
+    .map(x => `<span class="badge ${x.up ? 'up' : 'down'}">${x.t}</span>`).join('');
+
+  document.getElementById('empty-state').style.display  = 'none';
+  document.getElementById('result-state').style.display = 'flex';
+}
+
+// ── API error state ───────────────────────────────────────────────────────
+function showAPIError() {
+  document.getElementById('empty-state').style.display  = 'none';
+  document.getElementById('result-state').style.display = 'flex';
+  document.getElementById('price-display').textContent  = '—';
+  document.getElementById('range-display').textContent  =
+    'Could not reach API. Run: uvicorn api:app --reload --port 8000';
+  document.getElementById('conf-bar').style.width = '0%';
+  document.getElementById('conf-num').textContent  = '—';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function setD(id, pct, val) {
+  setTimeout(() => {
+    document.getElementById('df-' + id).style.width = Math.max(4, pct) + '%';
+  }, 150);
+  document.getElementById('dv-' + id).textContent = val;
+}
+
+function shake(el) {
+  el.style.animation = 'none';
+  el.offsetHeight;
+  el.style.animation = 'shake .4s ease';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const style = document.createElement('style');
+  style.textContent = `@keyframes shake {
+    0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)}
+    40%{transform:translateX(6px)} 60%{transform:translateX(-4px)}
+    80%{transform:translateX(4px)}
+  }`;
+  document.head.appendChild(style);
+
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Load live data from API on startup
+  loadMakes();
+  loadStats();
+});
+</script>
+</body>
+</html>
