@@ -11,14 +11,13 @@ build/
 venv/
 env/
 
-# Data — large files, regenerate with scraper.py + preprocess.py
-data/raw_listings.csv
-data/processed.csv
+# Data — regenerate with scraper/scraper.py + ml/preprocess.py
+data/*.csv
 
-# Model — regenerate with train.py
-models/price_model.joblib
+# Model — regenerate with ml/train.py
+models/*.joblib
 
-# Plots — regenerate with train.py
+# Plots — regenerate with ml/train.py
 outputs/
 
 # OS
@@ -29,3 +28,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.iml
+
+# Claude Code
+.claude/

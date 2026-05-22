@@ -1,31 +1,40 @@
 # Vehicle Price Predictor — Claude Code Context
 
 ## Project overview
-A full-stack Sri Lankan used vehicle price predictor. Scrapes riyasewana.com, trains an XGBoost model, and serves predictions via FastAPI + React.
+A full-stack Sri Lankan used vehicle price predictor. Scrapes riyasewana.com, trains an XGBoost model, and serves predictions via FastAPI + a vanilla HTML/CSS/JS dashboard.
 
 ## Stack
 - **Scraping**: requests + BeautifulSoup
 - **ML**: pandas, scikit-learn, XGBoost, SHAP, joblib
 - **Backend**: FastAPI + uvicorn
-- **Frontend**: React (to be built)
+- **Frontend**: Vanilla HTML/CSS/JS (no build step)
 - **Python**: 3.13 on Windows
 
 ## Project structure
 ```
-vehicle_price_predictor/
-├── scraper.py          # scrapes riyasewana.com search pages
-├── scrape_details.py   # fills in fuel/transmission/condition from detail pages
-├── preprocess.py       # cleans raw CSV, engineers features
-├── train.py            # trains XGBoost, outputs model + SHAP plots
-├── predict.py          # CLI prediction tool
-├── api.py              # FastAPI backend (to be built)
+RiyaPrice/
+├── api.py                       # FastAPI backend (root for easy uvicorn)
 ├── requirements.txt
+├── Makefile
+│
+├── scraper/
+│   ├── scraper.py               # scrapes riyasewana.com search pages
+│   └── scrape_details.py        # fills in fuel/transmission/condition from detail pages
+│
+├── ml/
+│   ├── preprocess.py            # cleans raw CSV, engineers features
+│   ├── train.py                 # trains XGBoost, outputs model + SHAP plots
+│   └── predict.py               # CLI prediction tool
+│
+├── frontend/
+│   └── index.html               # dashboard UI
+│
 ├── data/
-│   ├── raw_listings.csv     # scraped data (title, url, price_raw, year_raw, location, mileage_raw, fuel_type, transmission, condition, engine_cc)
-│   └── processed.csv        # cleaned, encoded, model-ready
+│   ├── raw_listings.csv         # scraped data (gitignored)
+│   └── processed.csv            # cleaned, encoded, model-ready (gitignored)
 ├── models/
-│   └── price_model.joblib   # saved bundle: {model, label_encoders, feature_cols, metrics}
-└── outputs/plots/           # actual_vs_predicted.png, feature_importance.png, shap_summary.png
+│   └── price_model.joblib       # saved bundle (gitignored)
+└── outputs/plots/               # actual_vs_predicted.png, feature_importance.png, shap_summary.png
 ```
 
 ## Model bundle
@@ -35,11 +44,12 @@ vehicle_price_predictor/
   "model":          xgb.XGBRegressor,
   "label_encoders": {"make": LabelEncoder, "location": LabelEncoder},
   "feature_cols":   [...],   # ordered list of feature names the model expects
-  "metrics":        {"MAE": ..., "RMSE": ..., "R²": ..., "MAPE (%)": ...}
+  "metrics":        {"MAE": ..., "RMSE": ..., "R²": ..., "MAPE (%)": ...},
+  "log_transform":  True,    # predictions must be back-transformed with np.exp()
 }
 ```
 
-## Feature engineering (must match preprocess.py exactly)
+## Feature engineering (must match ml/preprocess.py exactly)
 - `age = 2026 - year`
 - `log_mileage = np.log1p(mileage)`
 - `make`, `location` → LabelEncoded (use saved encoders; unseen values → -1)
@@ -51,18 +61,27 @@ vehicle_price_predictor/
 - Unseen categorical values → encode as -1 (not error)
 - Confidence range = predicted_price ± 12%
 
-## API requirements (api.py to be built)
+## API (api.py)
 - FastAPI app with CORS enabled (allow all origins for dev)
-- Load model once on startup via lifespan or @app.on_event("startup")
-- POST /predict → takes PredictRequest, returns PredictResponse
-- GET /market-stats → returns summary stats from processed.csv
-- GET /makes → returns list of known makes from label_encoders
-- GET / → health check, confirms model is loaded
-- Return 503 if model not loaded
+- Loads model once on startup via `@app.on_event("startup")`
+- `POST /predict` → takes PredictRequest, returns PredictResponse
+- `GET /market-stats` → returns summary stats from data/processed.csv
+- `GET /makes` → returns list of known makes from label_encoders
+- `GET /` → health check
+- Returns 503 if model not loaded
 
 ## Running locally
 ```bash
-pip install fastapi uvicorn
+uvicorn api:app --reload --port 8000
+# Then open frontend/index.html in your browser
+```
+
+## Pipeline
+```bash
+python scraper/scraper.py --pages 20
+python scraper/scrape_details.py
+python ml/preprocess.py
+python ml/train.py
 uvicorn api:app --reload --port 8000
 ```
 
@@ -73,5 +92,5 @@ uvicorn api:app --reload --port 8000
 (Will improve significantly once scrape_details.py finishes filling in fuel/transmission/condition)
 
 ## Do not modify
-- preprocess.py feature engineering logic (model was trained on this exact schema)
-- Label encoder usage pattern in predict.py (api.py must mirror this exactly)
+- ml/preprocess.py feature engineering logic (model was trained on this exact schema)
+- Label encoder usage pattern in ml/predict.py (api.py must mirror this exactly)
