@@ -1,15 +1,7 @@
-"""
-api.py
-------
-FastAPI backend for the vehicle price predictor.
-
-Usage:
-    uvicorn api:app --reload --port 8000
-"""
+#Fast api backend for the vehicle predictor 
 
 import os
 import logging
-
 import joblib
 import numpy as np
 import pandas as pd
