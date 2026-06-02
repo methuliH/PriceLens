@@ -173,4 +173,21 @@ uvicorn api:app --reload --port 8000
 - `GET /listings` uses `Literal["price_asc","price_desc","newest"]` for the `sort` param — FastAPI validates this at the schema level, but the `sort` field maps to MongoDB field names (`price`, `scraped_at`) which must exist on documents. Listings migrated from CSV will have `scraped_at` set; any future documents without it will sort to the end rather than erroring.
 - `POST /predict` comparables query fetches the 5 most recently scraped listings for the same make regardless of year or mileage proximity. This is intentional for now but may surface irrelevant comparables (e.g. a 2005 listing when predicting a 2022 vehicle). A year-range filter (`$gte: year-3, $lte: year+3`) would improve relevance.
 - `db/mongo.py` calls `load_dotenv()` at import time and `api.py` lifespan also calls it — this is harmless (dotenv is idempotent) but slightly redundant.
-- `GET /models/{make}` returns models distinct from the `model` field; since `migrate.py` currently sets `model: None` for all rows (scraper v2 not yet run), this endpoint will always return an empty list until detail scraping is extended to extract model names.
+- `GET /models/{make}` returns models distinct from the `model` field; since `migrate.py` currently sets `model: None` for all rows (scraper v2 not yet run), this endpoint will always return an empty list until detail scraping is extended to extract model names. **Resolved by PR #2.**
+
+### PR #2 — feat: extract model field from URL slug for existing listings
+
+**Files changed and why**
+
+| File | What changed |
+|------|--------------|
+| `db/extract_models.py` | New one-shot sync pymongo script; backfills `model` on all documents where it is `null` by parsing the riyasewana URL slug, with a title-word fallback and a junk filter |
+
+**Hardcoded values / secrets to move to .env**
+- `MONGO_URI` and `DB_NAME` both fall back to localhost defaults — same pattern as `db/migrate.py`; acceptable for a CLI one-shot script, must be set explicitly in any non-local environment.
+
+**Risks and uncertainties**
+- The URL parser assumes the slug structure `{make}-{model}-sale-{location}-{id}`. If riyasewana ever changes their URL format, the `-sale-` split will miss and the script falls back to the title. That fallback itself requires `make` to be non-null; documents with `make=null` will remain with `model=null` even after running.
+- The junk filter only catches exact matches for `{"car", "vehicle", "used", "sale"}` and 4-digit years. Abbreviations, typos, or other placeholder values in the model slot (e.g. "nan", "none", "unknown") would pass through as real model names — none were observed in this run but worth watching in future scrapes.
+- The script is idempotent: re-running it is safe because the query filters to `model IS NULL`, so already-filled documents are skipped entirely. However, incorrect extractions (if any were written) cannot be cleaned up by re-running — they'd need a separate correction pass.
+- On this run: 2,588/2,588 extracted from URL, 0 title fallbacks, 0 failures. The `GET /models/{make}` endpoint now returns real data.
