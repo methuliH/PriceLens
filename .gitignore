@@ -31,3 +31,6 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+.env
+*.env

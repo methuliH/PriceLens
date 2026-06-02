@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RiyaPrice — Sri Lanka Vehicle Price Predictor</title>
+<title>PriceLens — Sri Lanka Vehicle Price Predictor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -288,6 +288,11 @@ nav {
   box-shadow: 0 0 0 3px var(--amber-light);
 }
 .field input::placeholder { color: var(--text-3); }
+.field select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--slate-light);
+}
 
 .field-row {
   display: grid; grid-template-columns: 1fr 1fr; gap: .75rem;
@@ -474,7 +479,7 @@ footer {
     <div class="logo-mark">
       <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
     </div>
-    <span class="logo-name">RiyaPrice</span>
+    <span class="logo-name">PriceLens</span>
     <span class="logo-sub">Sri Lanka</span>
   </div>
 
@@ -559,6 +564,13 @@ footer {
             <option>Audi</option>
             <option>Kia</option>
             <option>Subaru</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Model</label>
+          <select id="model" disabled>
+            <option value="">Select make first</option>
           </select>
         </div>
 
@@ -669,7 +681,7 @@ footer {
 </div>
 
 <footer>
-  <div class="footer-left">RiyaPrice</div>
+  <div class="footer-left">PriceLens</div>
   <div class="footer-note">Model trained on 3,520 riyasewana.com listings · XGBoost · Data scraped May 2026</div>
 </footer>
 
@@ -733,9 +745,37 @@ async function loadStats() {
   }
 }
 
+// ── Cascading model dropdown ──────────────────────────────────────────────
+async function loadModels(make) {
+  const sel = document.getElementById('model');
+  if (!make) {
+    sel.innerHTML = '<option value="">Select make first</option>';
+    sel.disabled = true;
+    return;
+  }
+  sel.innerHTML = '<option value="">Loading…</option>';
+  sel.disabled = true;
+  try {
+    const res = await fetch(`${API}/models/${encodeURIComponent(make)}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    sel.innerHTML = '<option value="">Any model</option>';
+    data.models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = m;
+      sel.appendChild(opt);
+    });
+    sel.disabled = false;
+  } catch {
+    sel.innerHTML = '<option value="">Model unavailable</option>';
+    sel.disabled = true;
+  }
+}
+
 // ── Main predict function ─────────────────────────────────────────────────
 async function estimate() {
-  const make  = document.getElementById('make').value;
+  const make      = document.getElementById('make').value;
+  const modelName = document.getElementById('model').value || 'Unknown';
   const year  = parseInt(document.getElementById('year').value);
   const mile  = parseFloat(document.getElementById('mileage').value);
   const fuel  = document.getElementById('fuel').value;
@@ -758,6 +798,7 @@ async function estimate() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         make,
+        model_name:   modelName,
         year,
         mileage:      mile,
         fuel_type:    fuel,
@@ -877,6 +918,10 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
     });
+  });
+
+  document.getElementById('make').addEventListener('change', e => {
+    loadModels(e.target.value);
   });
 
   // Load live data from API on startup
