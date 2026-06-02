@@ -1,25 +1,20 @@
-#Fast api backend for the vehicle predictor 
-
 import os
 import logging
+from contextlib import asynccontextmanager
+from typing import Literal
+
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from db.mongo import listings as listings_col
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
-
-app = FastAPI(title="Vehicle Price Predictor", version="1.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 MODEL_PATH = "models/price_model.joblib"
 CURRENT_YEAR = 2026
@@ -27,17 +22,29 @@ CURRENT_YEAR = 2026
 bundle: dict | None = None
 
 
-@app.on_event("startup")
-async def load_model():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global bundle
+    load_dotenv()
     if not os.path.exists(MODEL_PATH):
-        log.warning(f"Model file not found at {MODEL_PATH} — run train.py first. API will start without it.")
-        return
-    try:
-        bundle = joblib.load(MODEL_PATH)
-        log.info(f"Model loaded from {MODEL_PATH}")
-    except Exception as e:
-        log.warning(f"Failed to load model: {e}")
+        log.warning(f"Model not found at {MODEL_PATH} — run ml/train.py first. API will start without it.")
+    else:
+        try:
+            bundle = joblib.load(MODEL_PATH)
+            log.info(f"Model loaded from {MODEL_PATH}")
+        except Exception as e:
+            log.warning(f"Failed to load model: {e}")
+    yield
+
+
+app = FastAPI(title="PriceLens", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -52,12 +59,39 @@ class PredictRequest(BaseModel):
     location: str = "Unknown"
 
 
+class ComparableListing(BaseModel):
+    title: str | None
+    make: str | None
+    year: int | None
+    mileage: float | None
+    price: float
+    fuel_type: str | None
+    transmission: str | None
+    condition: str | None
+    url: str | None
+
+
 class PredictResponse(BaseModel):
     predicted_price: float
     range_low: float
     range_high: float
     currency: str
     inputs_used: dict
+    comparables: list[ComparableListing]
+
+
+class ListingOut(BaseModel):
+    title: str | None
+    make: str | None
+    model: str | None
+    year: int | None
+    mileage: float | None
+    price: float | None
+    fuel_type: str | None
+    transmission: str | None
+    condition: str | None
+    location: str | None
+    url: str | None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -95,7 +129,11 @@ def build_input(req: PredictRequest) -> pd.DataFrame:
         if feat not in row:
             row[feat] = 0
 
-    for prefix, value in [("fuel_type", req.fuel_type), ("transmission", req.transmission), ("condition", _normalize_condition(req.condition))]:
+    for prefix, value in [
+        ("fuel_type", req.fuel_type),
+        ("transmission", req.transmission),
+        ("condition", _normalize_condition(req.condition)),
+    ]:
         col_name = f"{prefix}_{value}"
         if col_name in row:
             row[col_name] = 1
@@ -112,56 +150,137 @@ async def health():
 
 @app.get("/makes")
 async def makes():
-    if bundle is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    le = bundle["label_encoders"].get("make")
-    return {"makes": le.classes_.tolist() if le is not None else []}
+    col = listings_col()
+    db_makes = await col.distinct("make", {"is_active": True, "make": {"$ne": None}})
+    return {"makes": sorted(m for m in db_makes if m)}
+
+
+@app.get("/models/{make}")
+async def models(make: str):
+    col = listings_col()
+    db_models = await col.distinct("model", {"is_active": True, "make": make, "model": {"$ne": None}})
+    return {"models": sorted(m for m in db_models if m)}
 
 
 @app.get("/market-stats")
 async def market_stats():
-    path = "data/processed.csv"
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="processed.csv not found — run preprocess.py first")
+    col = listings_col()
+    docs = await col.find(
+        {"is_active": True, "price": {"$ne": None}},
+        {"price": 1, "make": 1, "fuel_type": 1, "_id": 0},
+    ).to_list(length=None)
 
-    df = pd.read_csv(path)
-    price = df["price"]
+    if not docs:
+        raise HTTPException(status_code=404, detail="No active listings in database")
 
-    top_makes = []
-    if bundle is not None and "make" in df.columns and "make" in bundle["label_encoders"]:
-        try:
-            le = bundle["label_encoders"]["make"]
-            make_names = le.inverse_transform(df["make"].astype(int))
-            counts = pd.Series(make_names).value_counts().head(5)
-            top_makes = [{"make": str(m), "count": int(c)} for m, c in counts.items()]
-        except Exception as e:
-            log.warning(f"Could not decode makes: {e}")
+    prices = np.array([d["price"] for d in docs if d.get("price") is not None])
 
-    fuel_cols = [c for c in df.columns if c.startswith("fuel_type_")]
-    fuel_dist = {
-        col.replace("fuel_type_", ""): int(df[col].astype(bool).sum())
-        for col in fuel_cols
-    }
+    make_counts: dict = {}
+    for d in docs:
+        m = d.get("make")
+        if m:
+            make_counts[m] = make_counts.get(m, 0) + 1
+    top_makes = [
+        {"make": m, "count": c}
+        for m, c in sorted(make_counts.items(), key=lambda x: -x[1])[:5]
+    ]
+
+    fuel_counts: dict = {}
+    for d in docs:
+        f = d.get("fuel_type")
+        if f:
+            fuel_counts[f] = fuel_counts.get(f, 0) + 1
 
     return {
-        "total_listings":  int(len(df)),
-        "avg_price":       float(price.mean()),
-        "median_price":    float(price.median()),
-        "min_price":       float(price.min()),
-        "max_price":       float(price.max()),
-        "top_makes":       top_makes,
-        "fuel_distribution": fuel_dist,
-        "currency":        "LKR",
+        "total_listings":    int(len(prices)),
+        "avg_price":         float(prices.mean()),
+        "median_price":      float(np.median(prices)),
+        "min_price":         float(prices.min()),
+        "max_price":         float(prices.max()),
+        "top_makes":         top_makes,
+        "fuel_distribution": fuel_counts,
+        "currency":          "LKR",
     }
+
+
+@app.get("/listings", response_model=list[ListingOut])
+async def listings(
+    make: str | None = Query(None),
+    model: str | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    sort: Literal["price_asc", "price_desc", "newest"] = Query("newest"),
+):
+    col = listings_col()
+    query: dict = {"is_active": True}
+    if make:
+        query["make"] = make
+    if model:
+        query["model"] = model
+
+    sort_field, sort_dir = {
+        "price_asc":  ("price", 1),
+        "price_desc": ("price", -1),
+        "newest":     ("scraped_at", -1),
+    }[sort]
+
+    docs = (
+        await col.find(query, {"_id": 0})
+        .sort(sort_field, sort_dir)
+        .limit(limit)
+        .to_list(length=limit)
+    )
+    return [
+        ListingOut(
+            title=d.get("title"),
+            make=d.get("make"),
+            model=d.get("model"),
+            year=d.get("year"),
+            mileage=d.get("mileage"),
+            price=d.get("price"),
+            fuel_type=d.get("fuel_type"),
+            transmission=d.get("transmission"),
+            condition=d.get("condition"),
+            location=d.get("location"),
+            url=d.get("url"),
+        )
+        for d in docs
+    ]
 
 
 @app.post("/predict", response_model=PredictResponse)
 async def predict(req: PredictRequest):
     if bundle is None:
-        raise HTTPException(status_code=503, detail="Model not loaded — run train.py first")
+        raise HTTPException(status_code=503, detail="Model not loaded — run ml/train.py first")
 
     X = build_input(req)
     price = float(np.exp(bundle["model"].predict(X)[0]))
+
+    col = listings_col()
+    raw_comps = await (
+        col.find(
+            {"is_active": True, "make": req.make, "price": {"$ne": None}},
+            {"title": 1, "make": 1, "year": 1, "mileage": 1, "price": 1,
+             "fuel_type": 1, "transmission": 1, "condition": 1, "url": 1, "_id": 0},
+        )
+        .sort("scraped_at", -1)
+        .limit(5)
+        .to_list(length=5)
+    )
+
+    comparables = [
+        ComparableListing(
+            title=d.get("title"),
+            make=d.get("make"),
+            year=d.get("year"),
+            mileage=d.get("mileage"),
+            price=d["price"],
+            fuel_type=d.get("fuel_type"),
+            transmission=d.get("transmission"),
+            condition=d.get("condition"),
+            url=d.get("url"),
+        )
+        for d in raw_comps
+    ]
 
     return PredictResponse(
         predicted_price=price,
@@ -169,4 +288,5 @@ async def predict(req: PredictRequest):
         range_high=price * 1.12,
         currency="LKR",
         inputs_used=req.model_dump(),
+        comparables=comparables,
     )

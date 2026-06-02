@@ -1,6 +1,6 @@
 """
-migrate.py — load raw_listings.csv into MongoDB
-Run once: python migrate.py
+migrate.py — load raw_listings.csv into MongoDB (pricelens DB)
+Run once: python db/migrate.py
 """
 
 import os
@@ -13,15 +13,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME   = os.getenv("DB_NAME", "riyaprice")
+DB_NAME   = os.getenv("DB_NAME", "pricelens")
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 def parse_price(raw) -> float | None:
     if pd.isna(raw):
         return None
-    cleaned = re.sub(r"[^\d.]", "", str(raw))
-    return float(cleaned) if cleaned else None
+    # Match the first run of digits+commas (e.g. "Rs. 6,000,000" → "6,000,000")
+    m = re.search(r"[\d,]+(?:\.\d+)?", str(raw))
+    if not m:
+        return None
+    return float(m.group().replace(",", "")) or None
 
 
 def parse_year(raw) -> int | None:
