@@ -2,19 +2,24 @@
 train.py
 --------
 Trains an XGBoost model to predict vehicle prices.
-Outputs: model file, feature importance chart, SHAP summary.
+Reads training data from MongoDB (or falls back to processed.csv).
+Outputs: model bundle, feature importance chart, SHAP summary.
 
 Usage:
-    python ml/train.py --input data/processed.csv --model-out models/price_model.joblib
+    python ml/train.py
+    python ml/train.py --input data/processed.csv   # force CSV path
+    python ml/train.py --model-out models/price_model.joblib
 """
 
-import pandas as pd
-import numpy as np
-import argparse
 import os
+import sys
 import logging
-import joblib
+import argparse
 
+import joblib
+import numpy as np
+import pandas as pd
+from dotenv import load_dotenv
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import LabelEncoder
@@ -23,47 +28,51 @@ import shap
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
+# Ensure project root is importable when running as a script from any CWD
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+from ml.preprocess import load_from_mongo, load_from_csv  # noqa: E402
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
 
-# ── Feature config ───────────────────────────────────────────────────────────
+# ── Feature config ────────────────────────────────────────────────────────────
 
-NUMERIC_FEATURES = ["age", "log_mileage", "year", "engine_cc_num"]
+NUMERIC_FEATURES     = ["age", "log_mileage", "year", "engine_cc_num", "make_model_mean_price"]
 CATEGORICAL_FEATURES = ["make", "model", "location"]
-
-OHE_PREFIXES = ["fuel_type_", "transmission_", "condition_"]
-
-TARGET = "price"
+OHE_PREFIXES         = ["fuel_type_", "transmission_", "condition_"]
+TARGET               = "price"
 
 
-# ── Data loading ─────────────────────────────────────────────────────────────
+# ── Feature matrix builder ────────────────────────────────────────────────────
 
 def load_features(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, dict, list]:
     ohe_cols = [c for c in df.columns if any(c.startswith(p) for p in OHE_PREFIXES)]
 
     df = df.copy()
-    label_encoders = {}
+    label_encoders: dict[str, LabelEncoder] = {}
     for col in CATEGORICAL_FEATURES:
         if col in df.columns:
             le = LabelEncoder()
-            df[col] = df[col].fillna("Unknown").astype(object)
-            df[col] = le.fit_transform(df[col].astype(str))
+            df[col] = df[col].fillna("Unknown").astype(str)
+            df[col] = le.fit_transform(df[col])
             label_encoders[col] = le
 
     feature_cols = (
-        [c for c in NUMERIC_FEATURES if c in df.columns]
+        [c for c in NUMERIC_FEATURES     if c in df.columns]
         + [c for c in CATEGORICAL_FEATURES if c in df.columns]
         + ohe_cols
     )
 
     X = df[feature_cols].fillna(0)
     y = df[TARGET]
-
     return X, y, label_encoders, feature_cols
 
 
-# ── Model training ────────────────────────────────────────────────────────────
+# ── Model training ─────────────────────────────────────────────────────────────
 
 def train(X_train, y_train) -> xgb.XGBRegressor:
     model = xgb.XGBRegressor(
@@ -84,25 +93,24 @@ def train(X_train, y_train) -> xgb.XGBRegressor:
     return model
 
 
-# ── Evaluation ────────────────────────────────────────────────────────────────
+# ── Evaluation ─────────────────────────────────────────────────────────────────
 
 def evaluate_raw(y_true, y_pred) -> dict:
-    """Evaluate in original LKR scale (after back-transforming from log)."""
     mae  = mean_absolute_error(y_true, y_pred)
     rmse = np.sqrt(mean_squared_error(y_true, y_pred))
     r2   = r2_score(y_true, y_pred)
     mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-    metrics = {"MAE": mae, "RMSE": rmse, "R²": r2, "MAPE (%)": mape}
-    print("\n── Model Evaluation (LKR scale) ──────────────")
+    metrics = {"MAE": mae, "RMSE": rmse, "R2": r2, "MAPE (%)": mape}
+    print("\n-- Model Evaluation (LKR scale) --")
     print(f"  MAE  : LKR {mae:>15,.0f}")
     print(f"  RMSE : LKR {rmse:>15,.0f}")
-    print(f"  R²   : {r2:.4f}")
+    print(f"  R2   : {r2:.4f}")
     print(f"  MAPE : {mape:.2f}%")
-    print("─────────────────────────────────────────────\n")
+    print("-----------------------------------\n")
     return metrics
 
 
-# ── Plots ─────────────────────────────────────────────────────────────────────
+# ── Plots ──────────────────────────────────────────────────────────────────────
 
 def plot_predictions(y_test, preds, out_dir: str):
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -119,7 +127,7 @@ def plot_predictions(y_test, preds, out_dir: str):
     path = os.path.join(out_dir, "actual_vs_predicted.png")
     plt.savefig(path, dpi=150)
     plt.close()
-    log.info(f"Saved plot → {path}")
+    log.info(f"Saved plot -> {path}")
 
 
 def plot_feature_importance(model, feature_cols: list, out_dir: str):
@@ -135,7 +143,7 @@ def plot_feature_importance(model, feature_cols: list, out_dir: str):
     path = os.path.join(out_dir, "feature_importance.png")
     plt.savefig(path, dpi=150)
     plt.close()
-    log.info(f"Saved plot → {path}")
+    log.info(f"Saved plot -> {path}")
 
 
 def plot_shap(model, X_test, out_dir: str):
@@ -149,14 +157,17 @@ def plot_shap(model, X_test, out_dir: str):
     path = os.path.join(out_dir, "shap_summary.png")
     plt.savefig(path, dpi=150, bbox_inches="tight")
     plt.close()
-    log.info(f"Saved SHAP plot → {path}")
+    log.info(f"Saved SHAP plot -> {path}")
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
+    load_dotenv()
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input",     default="data/processed.csv")
+    parser.add_argument("--input",     default="data/processed.csv",
+                        help="CSV fallback path (used only when MONGO_URI is unset)")
     parser.add_argument("--model-out", default="models/price_model.joblib")
     parser.add_argument("--plot-dir",  default="outputs/plots")
     parser.add_argument("--test-size", type=float, default=0.2)
@@ -165,26 +176,77 @@ def main():
     os.makedirs(os.path.dirname(args.model_out), exist_ok=True)
     os.makedirs(args.plot_dir, exist_ok=True)
 
-    df = pd.read_csv(args.input)
-    log.info(f"Loaded: {df.shape[0]} rows, {df.shape[1]} cols")
+    # ── Load data: MongoDB preferred, CSV fallback ────────────────────────────
+    if os.getenv("MONGO_URI"):
+        try:
+            df = load_from_mongo()
+            log.info(f"Loaded from MongoDB: {df.shape[0]} rows, {df.shape[1]} cols")
+        except Exception as exc:
+            log.warning(f"MongoDB load failed ({exc}) -- falling back to CSV: {args.input}")
+            df = load_from_csv(args.input)
+    else:
+        log.info(f"MONGO_URI not set -- loading from CSV: {args.input}")
+        df = load_from_csv(args.input)
 
-    X, y, label_encoders, feature_cols = load_features(df)
-    log.info(f"Features: {len(feature_cols)}")
+    # Ensure model column exists (absent in CSV path)
+    if "model" not in df.columns:
+        df["model"] = "Unknown"
 
-    # Log-transform target — compresses the wide price range, improves MAPE
-    y_log = np.log1p(y)
+    log.info(f"Dataset: {df.shape[0]} rows, {df.shape[1]} cols")
+    df = df.reset_index(drop=True)
 
-    X_train, X_test, y_log_train, y_log_test = train_test_split(
-        X, y_log, test_size=args.test_size, random_state=42
+    # ── Pre-split index to compute group means without leakage ────────────────
+    idx_all = list(range(len(df)))
+    idx_train, idx_test = train_test_split(
+        idx_all, test_size=args.test_size, random_state=42
     )
-    y_test = np.expm1(y_log_test)
+
+    train_slice = df.iloc[idx_train][["make", "model", "price"]].copy()
+    train_slice["make"]  = train_slice["make"].fillna("Unknown").astype(str)
+    train_slice["model"] = train_slice["model"].fillna("Unknown").astype(str)
+
+    global_mean: float = float(train_slice["price"].mean())
+    make_model_means: dict = (
+        train_slice.groupby(["make", "model"])["price"]
+        .mean()
+        .to_dict()
+    )
+    log.info(
+        f"Computed mean prices for {len(make_model_means)} (make, model) pairs "
+        f"(global mean: LKR {global_mean:,.0f})"
+    )
+
+    # Apply to full df — test rows get training-set means (no leakage)
+    _make  = df["make"].fillna("Unknown").astype(str)
+    _model = df["model"].fillna("Unknown").astype(str)
+    df["make_model_mean_price"] = [
+        make_model_means.get((m, mod), global_mean)
+        for m, mod in zip(_make, _model)
+    ]
+
+    # ── Build feature matrix ──────────────────────────────────────────────────
+    X, y, label_encoders, feature_cols = load_features(df)
+    log.info(f"Features ({len(feature_cols)}): {feature_cols}")
+
+    y_log       = np.log1p(y)
+    X_train     = X.iloc[idx_train]
+    X_test      = X.iloc[idx_test]
+    y_log_train = y_log.iloc[idx_train]
+    y_log_test  = y_log.iloc[idx_test]
+    y_test      = np.expm1(y_log_test)
     log.info(f"Train: {len(X_train)} | Test: {len(X_test)}")
 
+    # ── Cross-validation ──────────────────────────────────────────────────────
     log.info("Running 5-fold cross-validation...")
-    cv_model = xgb.XGBRegressor(n_estimators=300, learning_rate=0.05, max_depth=6, random_state=42, n_jobs=-1)
-    cv_scores = cross_val_score(cv_model, X, y_log, cv=5, scoring="neg_mean_absolute_error", n_jobs=-1)
-    log.info(f"CV MAE (log scale): {-cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+    cv_model = xgb.XGBRegressor(
+        n_estimators=300, learning_rate=0.05, max_depth=6, random_state=42, n_jobs=-1
+    )
+    cv_scores = cross_val_score(
+        cv_model, X, y_log, cv=5, scoring="neg_mean_absolute_error", n_jobs=-1
+    )
+    log.info(f"CV MAE (log scale): {-cv_scores.mean():.4f} +/- {cv_scores.std():.4f}")
 
+    # ── Train final model ─────────────────────────────────────────────────────
     log.info("Training final model...")
     model = train(X_train, y_log_train)
 
@@ -196,15 +258,18 @@ def main():
     plot_feature_importance(model, feature_cols, args.plot_dir)
     plot_shap(model, X_test, args.plot_dir)
 
+    # ── Save bundle ───────────────────────────────────────────────────────────
     bundle = {
-        "model":          model,
-        "label_encoders": label_encoders,
-        "feature_cols":   feature_cols,
-        "metrics":        metrics,
-        "log_transform":  True,
+        "model":             model,
+        "label_encoders":    label_encoders,   # includes "model" encoder
+        "feature_cols":      feature_cols,
+        "metrics":           metrics,
+        "log_transform":     True,
+        "make_model_means":  make_model_means,
+        "global_mean_price": global_mean,
     }
     joblib.dump(bundle, args.model_out)
-    log.info(f"Model saved → {args.model_out}")
+    log.info(f"Model saved -> {args.model_out}")
 
 
 if __name__ == "__main__":

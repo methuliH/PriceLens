@@ -51,6 +51,7 @@ app.add_middleware(
 
 class PredictRequest(BaseModel):
     make: str
+    model: str | None = None
     year: int = Field(..., ge=1980, le=2026)
     mileage: float = Field(..., ge=0)
     fuel_type: str = "Petrol"
@@ -110,13 +111,23 @@ def _normalize_condition(raw: str) -> str:
 
 
 def build_input(req: PredictRequest) -> pd.DataFrame:
+    model_str = (req.model or "Unknown").strip() or "Unknown"
+
     row: dict = {
         "year":        req.year,
         "age":         CURRENT_YEAR - req.year,
         "log_mileage": np.log1p(req.mileage),
     }
 
-    for col, val in [("make", req.make), ("location", req.location)]:
+    # make_model_mean_price from saved lookup; fall back to global mean if unseen
+    if "make_model_means" in bundle:
+        key = (req.make, model_str)
+        row["make_model_mean_price"] = bundle["make_model_means"].get(
+            key, bundle.get("global_mean_price", 0.0)
+        )
+
+    # Label-encode make, model, location
+    for col, val in [("make", req.make), ("model", model_str), ("location", req.location)]:
         if col in bundle["label_encoders"]:
             le = bundle["label_encoders"][col]
             try:
