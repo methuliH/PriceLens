@@ -12,3 +12,4 @@ uvicorn==0.47.0
 motor==3.4.0
 pymongo==4.7.2
 python-dotenv==1.0.1
+apscheduler==3.10.4
