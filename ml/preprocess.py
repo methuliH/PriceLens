@@ -7,6 +7,7 @@ Usage:
     python preprocess.py --input data/raw_listings.csv --output data/processed.csv
 """
 
+import os
 import pandas as pd
 import numpy as np
 import re
@@ -234,6 +235,98 @@ def encode(df: pd.DataFrame) -> pd.DataFrame:
     """One-hot encode categorical columns for model training."""
     cat_cols = ["fuel_type", "transmission", "condition"]
     df = pd.get_dummies(df, columns=[c for c in cat_cols if c in df.columns], drop_first=False)
+    return df
+
+
+# ── MongoDB / CSV loaders ─────────────────────────────────────────────────────
+
+def load_from_mongo() -> pd.DataFrame:
+    """Read active listings from MongoDB, clean and OHE-encode them.
+
+    Returns a DataFrame in the same format as processed.csv, with an extra
+    `model` string column ready for label encoding in train.py.
+    Raises RuntimeError if MONGO_URI is not set.
+    """
+    from pymongo import MongoClient
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    uri = os.getenv("MONGO_URI")
+    if not uri:
+        raise RuntimeError("MONGO_URI not set — add it to .env or environment")
+    db_name = os.getenv("DB_NAME", "pricelens")
+
+    log.info("Loading data from MongoDB...")
+    client = MongoClient(uri)
+    col    = client[db_name]["listings"]
+    docs   = list(col.find(
+        {"is_active": True, "price": {"$ne": None}},
+        {"_id": 0, "title": 1, "make": 1, "model": 1, "year": 1, "mileage": 1,
+         "price": 1, "fuel_type": 1, "transmission": 1, "condition": 1,
+         "location": 1, "url": 1},
+    ))
+    client.close()
+    log.info(f"Fetched {len(docs)} documents from MongoDB")
+
+    if not docs:
+        raise RuntimeError("No active listings with price found in MongoDB")
+
+    df = pd.DataFrame(docs)
+
+    # Numeric — already parsed in the DB; coerce and drop bad rows
+    df["price"]   = pd.to_numeric(df["price"],   errors="coerce")
+    df["mileage"] = pd.to_numeric(df["mileage"] if "mileage" in df.columns else np.nan, errors="coerce")
+    df["year"]    = pd.to_numeric(df["year"]    if "year"    in df.columns else np.nan, errors="coerce")
+
+    df = df.dropna(subset=["price", "mileage", "year"])
+    df = df[(df["price"] > 100_000) & (df["price"] < 100_000_000)]
+    df = df[df["mileage"] < 2_000_000]
+    df["year"] = df["year"].astype(int)
+    df = df[df["year"].between(1980, CURRENT_YEAR)]
+
+    # Derived features
+    df["age"]         = CURRENT_YEAR - df["year"]
+    df["log_mileage"] = np.log1p(df["mileage"])
+
+    # Normalize categoricals
+    for col_name in ["fuel_type", "transmission", "condition"]:
+        if col_name not in df.columns:
+            df[col_name] = "Unknown"
+    df["fuel_type"]    = df["fuel_type"].apply(normalize_fuel)
+    df["transmission"] = df["transmission"].apply(normalize_transmission)
+    df["condition"]    = df["condition"].apply(normalize_condition)
+
+    # Infer still-unknown fuel/transmission from title
+    if "title" in df.columns:
+        mask_fuel  = df["fuel_type"].isin(["Unknown", "Other"])
+        mask_trans = df["transmission"].isin(["Unknown", "Other"])
+        df.loc[mask_fuel,  "fuel_type"]    = df.loc[mask_fuel,  "title"].apply(fuel_from_title)
+        df.loc[mask_trans, "transmission"] = df.loc[mask_trans, "title"].apply(transmission_from_title)
+
+    # model — keep as string; label encoding happens in train.py
+    if "model" not in df.columns:
+        df["model"] = "Unknown"
+    df["model"] = df["model"].fillna("Unknown").astype(str)
+
+    # Remaining string fields
+    df["make"]     = df["make"].fillna("Unknown").astype(str)     if "make"     in df.columns else "Unknown"
+    df["location"] = df["location"].fillna("Unknown").astype(str) if "location" in df.columns else "Unknown"
+
+    # Drop duplicates
+    df = df.drop_duplicates(subset=["title", "price", "mileage"], keep="first")
+
+    keep = ["title", "make", "model", "year", "age", "mileage", "log_mileage",
+            "fuel_type", "transmission", "condition", "location", "price", "url"]
+    df = df[[c for c in keep if c in df.columns]].reset_index(drop=True)
+    log.info(f"After cleaning: {df.shape}")
+
+    return encode(df)
+
+
+def load_from_csv(path: str = "data/processed.csv") -> pd.DataFrame:
+    """Load an already-processed CSV (output of the preprocess pipeline)."""
+    df = pd.read_csv(path)
+    log.info(f"Loaded from CSV: {df.shape[0]} rows, {df.shape[1]} cols")
     return df
 
 
