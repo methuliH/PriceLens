@@ -3,6 +3,9 @@ ikman_scraper.py
 ----------------
 Scrapes vehicle listings from ikman.lk and upserts them to MongoDB.
 
+Card data extracted from SSR HTML (stable data-testid attributes).
+Detail data extracted from embedded JSON in each listing page.
+
 Usage:
     python ikman_scraper.py --pages 20
 """
@@ -25,9 +28,9 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
-MONGO_URI        = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME          = os.getenv("MONGO_DB", "price_prediction")
-COLLECTION_NAME  = os.getenv("MONGO_COLLECTION", "listings")
+MONGO_URI       = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+DB_NAME         = os.getenv("MONGO_DB", "price_prediction")
+COLLECTION_NAME = os.getenv("MONGO_COLLECTION", "listings")
 
 HEADERS = {
     "User-Agent": (
@@ -35,20 +38,42 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "en-US,en;q=0.9",
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;"
+        "q=0.9,image/avif,image/webp,*/*;q=0.8"
+    ),
+    "Accept-Language":        "en-US,en;q=0.9",
+    "Accept-Encoding":        "gzip, deflate, br",
+    "Connection":             "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest":         "document",
+    "Sec-Fetch-Mode":         "navigate",
+    "Sec-Fetch-Site":         "none",
 }
 
 BASE_URL = "https://ikman.lk/en/ads/sri-lanka/cars"
 
+# Maps embedded JSON attribute keys → our field names
+_ATTR_KEY_MAP = {
+    "brand":           "make",
+    "model":           "model",
+    "model_year":      "year",
+    "condition":       "condition",
+    "transmission":    "transmission",
+    "fuel_type":       "fuel_type",
+    "engine_capacity": "engine_cc_raw",
+    "mileage":         "mileage_raw",
+}
 
-# ── Fetch helpers ─────────────────────────────────────────────────────────────
 
-def get_page(url: str, retries: int = 3) -> BeautifulSoup | None:
+# ── Fetch helper ──────────────────────────────────────────────────────────────
+
+def _get(url: str, retries: int = 3) -> requests.Response | None:
     for attempt in range(retries):
         try:
-            resp = requests.get(url, headers=HEADERS, timeout=15)
-            resp.raise_for_status()
-            return BeautifulSoup(resp.text, "html.parser")
+            r = requests.get(url, headers=HEADERS, timeout=15)
+            r.raise_for_status()
+            return r
         except requests.RequestException as e:
             log.warning(f"Attempt {attempt + 1} failed for {url}: {e}")
             time.sleep(2 ** attempt)
@@ -56,75 +81,96 @@ def get_page(url: str, retries: int = 3) -> BeautifulSoup | None:
     return None
 
 
-# ── Parsers ───────────────────────────────────────────────────────────────────
-
-def parse_price(raw: str | None) -> float | None:
-    if not raw:
-        return None
-    digits = re.sub(r"[^\d]", "", raw)
-    return float(digits) if digits else None
-
+# ── Card parser (SERP page) ───────────────────────────────────────────────────
 
 def parse_listing_card(card) -> dict:
-    data: dict = {}
-    try:
-        link = card.select_one("a[href]")
-        if link:
-            href = link.get("href", "")
-            data["url"] = f"https://ikman.lk{href}" if href.startswith("/") else href
+    """
+    Extract fields from a listing <li> element on the search results page.
+    Uses data-testid='ad-card-link' anchor (stable across deployments) and
+    regex on the rendered anchor text for mileage / price.
+    """
+    a = card.find("a", attrs={"data-testid": "ad-card-link"})
+    if not a:
+        return {}
 
-        title_tag = card.select_one("h2, .title, [class*='title']")
-        if title_tag:
-            data["title"] = title_tag.get_text(strip=True)
+    href  = a.get("href", "")
+    url   = f"https://ikman.lk{href}" if href.startswith("/") else href
+    title = (a.get("title") or "").strip()
+    if not title:
+        h2 = a.find("h2")
+        title = h2.get_text(strip=True) if h2 else ""
 
-        price_tag = card.select_one("[class*='price']")
-        data["price"] = parse_price(price_tag.get_text(strip=True) if price_tag else None)
+    text = a.get_text(separator=" ", strip=True)
 
-        location_tag = card.select_one("[class*='location'], [class*='area']")
-        if location_tag:
-            data["location"] = location_tag.get_text(strip=True)
+    price_m   = re.search(r"Rs\s*([\d,]+)", text)
+    mileage_m = re.search(r"([\d,]+)\s*km", text)
+    year_m    = re.search(r"\b(19|20)\d{2}\b", title)
 
-        year_match = re.search(r"\b(19|20)\d{2}\b", data.get("title", ""))
-        if year_match:
-            data["year"] = int(year_match.group())
+    # Location appears as "CityName, Cars" in the anchor text
+    loc_m = re.search(r"([A-Za-z][A-Za-z\s]+),\s*Cars", text)
 
-    except Exception as e:
-        log.debug(f"Error parsing card: {e}")
+    return {
+        "url":      url,
+        "title":    title,
+        "price":    float(price_m.group(1).replace(",", ""))   if price_m   else None,
+        "mileage":  float(mileage_m.group(1).replace(",", "")) if mileage_m else None,
+        "year":     int(year_m.group())                        if year_m    else None,
+        "location": loc_m.group(1).strip()                     if loc_m     else None,
+    }
 
-    return data
 
+# ── Detail parser (individual listing page) ──────────────────────────────────
 
 def parse_listing_detail(url: str) -> dict:
-    if not url:
+    """
+    Fetch the listing page and extract make/model/fuel/transmission/condition
+    from the embedded Redux state JSON (\"ad\":{...} block).
+    """
+    resp = _get(url)
+    if not resp:
         return {}
-    soup = get_page(url)
-    if not soup:
+
+    raw = resp.text
+    ad_start = raw.find('"ad":{')
+    if ad_start == -1:
         return {}
+
+    snippet = raw[ad_start: ad_start + 5000]
+
+    # Parse attributes array: {"label":"Brand","value":"Toyota","key":"brand",...}
+    raw_attrs = re.findall(
+        r'"label":"([^"]+)","value":"([^"]+)","key":"([^"]+)"',
+        snippet,
+    )
+    attr_by_key = {key: value for _, value, key in raw_attrs}
 
     data: dict = {}
-    try:
-        for row in soup.select("table tr, .details li, [class*='detail'] li"):
-            cells = row.find_all(["td", "th", "span"])
-            if len(cells) >= 2:
-                key = cells[0].get_text(strip=True).lower().replace(" ", "_")
-                val = cells[1].get_text(strip=True)
-                data[key] = val
+    for json_key, field in _ATTR_KEY_MAP.items():
+        if json_key in attr_by_key:
+            data[field] = attr_by_key[json_key]
 
-        for key_hint, field in [("make", "make"), ("brand", "make"), ("model", "model"),
-                                 ("mileage", "mileage"), ("fuel", "fuel_type"),
-                                 ("transmission", "transmission"), ("condition", "condition")]:
-            for tag in soup.select(f"[data-key='{key_hint}'], [class*='{key_hint}']"):
-                if field not in data:
-                    data[field] = tag.get_text(strip=True)
+    # Clean numeric fields
+    if "mileage_raw" in data:
+        m = re.search(r"[\d,]+", data.pop("mileage_raw"))
+        data["mileage"] = float(m.group().replace(",", "")) if m else None
 
-        mileage_tag = soup.select_one("[class*='mileage'], [data-key='mileage']")
-        if mileage_tag and "mileage" not in data:
-            raw = mileage_tag.get_text(strip=True)
-            digits = re.sub(r"[^\d]", "", raw)
-            data["mileage"] = float(digits) if digits else None
+    if "engine_cc_raw" in data:
+        m = re.search(r"[\d,]+", data.pop("engine_cc_raw"))
+        data["engine_cc"] = int(m.group().replace(",", "")) if m else None
 
-    except Exception as e:
-        log.debug(f"Error parsing detail {url}: {e}")
+    if "year" in data:
+        y = data["year"]
+        data["year"] = int(y) if str(y).isdigit() else None
+
+    # Location from JSON (more precise city name than card text)
+    loc_m = re.search(r'"location":\{"id":\d+,"name":"([^"]+)"', snippet)
+    if loc_m:
+        data["location"] = loc_m.group(1)
+
+    # Price from JSON (fallback if card parse missed it)
+    price_m = re.search(r'"amount":"Rs\s*([\d,]+)"', snippet)
+    if price_m:
+        data["price"] = float(price_m.group(1).replace(",", ""))
 
     return data
 
@@ -135,16 +181,18 @@ def scrape(num_pages: int = 10, detail_pages: bool = True) -> list[dict]:
     all_records: list[dict] = []
 
     for page_num in range(1, num_pages + 1):
-        url = f"{BASE_URL}?sort_by=date&order=desc&page={page_num}"
+        url = BASE_URL if page_num == 1 else f"{BASE_URL}?page={page_num}"
         log.info(f"Scraping page {page_num}/{num_pages} -> {url}")
 
-        soup = get_page(url)
-        if not soup:
+        resp = _get(url)
+        if not resp:
             continue
 
-        cards = soup.select("li.listing, [class*='item'], [class*='ad-listing']")
+        soup  = BeautifulSoup(resp.text, "html.parser")
+        cards = soup.select("li.gtm-normal-ad, li.gtm-top-ad")
+
         if not cards:
-            log.warning(f"No listing cards on page {page_num} — stopping")
+            log.warning(f"No listing cards on page {page_num} — stopping pagination")
             break
 
         log.info(f"  Found {len(cards)} listings on page {page_num}")
@@ -153,9 +201,13 @@ def scrape(num_pages: int = 10, detail_pages: bool = True) -> list[dict]:
             record = parse_listing_card(card)
             if not record.get("url"):
                 continue
+
             if detail_pages:
                 time.sleep(random.uniform(1.5, 3.0))
-                record.update(parse_listing_detail(record["url"]))
+                detail = parse_listing_detail(record["url"])
+                # Detail fields win over card fields (more precise)
+                record.update(detail)
+
             all_records.append(record)
 
         time.sleep(random.uniform(2.0, 4.0))
@@ -200,7 +252,7 @@ def run(pages: int = 50) -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="Scrape ikman.lk vehicle listings")
-    parser.add_argument("--pages", type=int, default=20)
+    parser.add_argument("--pages",      type=int, default=20)
     parser.add_argument("--no-details", action="store_true")
     args = parser.parse_args()
 
