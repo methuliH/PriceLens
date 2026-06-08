@@ -914,6 +914,23 @@ const CAR_SVG = `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2
   <path d="M16 36l4-10h24l4 10" stroke="#767F9E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+function escapeHTML(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeUrl(url) {
+  if (!url) return '#';
+  try {
+    const p = new URL(url);
+    return (p.protocol === 'http:' || p.protocol === 'https:') ? url : '#';
+  } catch { return '#'; }
+}
+
 function lkr(n) {
   if (n >= 1e6) return 'Rs. ' + (n / 1e6).toFixed(2) + 'M';
   return 'Rs. ' + Math.round(n).toLocaleString();
@@ -941,21 +958,22 @@ function renderListingCards(listings, containerId) {
 
     const pills = [listing.fuel_type, listing.transmission, listing.condition]
       .filter(Boolean)
-      .map(v => `<span class="card-pill">${v}</span>`)
+      .map(v => `<span class="card-pill">${escapeHTML(v)}</span>`)
       .join('');
 
     const mileage = listing.mileage != null
       ? Math.round(listing.mileage).toLocaleString() + ' km'
       : 'Mileage N/A';
 
-    const url = listing.url || '#';
+    const url = safeUrl(listing.url);
+    const safeTitle = escapeHTML(title);
 
     return `
       <div class="listing-card">
         <div class="card-thumb">${CAR_SVG}</div>
         <div class="card-body">
           <div class="card-price">${price}</div>
-          <div class="card-title" title="${title}">${title}</div>
+          <div class="card-title" title="${safeTitle}">${safeTitle}</div>
           <div class="card-pills">${pills}</div>
           <div class="card-mileage">${mileage}</div>
           <a class="card-btn" href="${url}" target="_blank" rel="noopener noreferrer">View Listing →</a>
@@ -1075,7 +1093,7 @@ async function estimate() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         make,
-        model_name:   modelName,
+        model:        modelName,
         year,
         mileage:      mile,
         fuel_type:    fuel,
@@ -1129,7 +1147,10 @@ function clearComparables() {
 }
 
 // ── Browse listings ───────────────────────────────────────────────────────
+let _browseReqId = 0;
+
 async function loadBrowseListings(make, fuelType) {
+  const reqId = ++_browseReqId;
   const container = document.getElementById('browse-container');
   container.innerHTML = '<p class="browse-message">Loading listings…</p>';
 
@@ -1139,18 +1160,21 @@ async function loadBrowseListings(make, fuelType) {
     if (fuelType) url += `&fuel_type=${encodeURIComponent(fuelType)}`;
 
     const res = await fetch(url);
+    if (reqId !== _browseReqId) return;
     if (!res.ok) throw new Error(`API error ${res.status}`);
     const data = await res.json();
+    if (reqId !== _browseReqId) return;
 
-    const listings = data.listings || data;
+    const listings = Array.isArray(data) ? data : (data.listings || []);
 
-    if (!listings || listings.length === 0) {
+    if (listings.length === 0) {
       container.innerHTML = '<p class="browse-message">No listings found. Try a different filter.</p>';
       return;
     }
 
     renderListingCards(listings, 'browse-container');
   } catch (err) {
+    if (reqId !== _browseReqId) return;
     container.innerHTML = `<p class="browse-message">Could not load listings. Make sure the API is running: uvicorn api:app --reload --port 8000</p>`;
   }
 }

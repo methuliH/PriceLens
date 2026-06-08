@@ -87,6 +87,7 @@ class ListingOut(BaseModel):
     model: str | None
     year: int | None
     mileage: float | None
+    engine_cc: int | None
     price: float | None
     fuel_type: str | None
     transmission: str | None
@@ -176,40 +177,53 @@ async def models(make: str):
 @app.get("/market-stats")
 async def market_stats():
     col = listings_col()
-    docs = await col.find(
-        {"is_active": True, "price": {"$ne": None}},
-        {"price": 1, "make": 1, "fuel_type": 1, "_id": 0},
-    ).to_list(length=None)
+    match = {"is_active": True, "price": {"$ne": None}}
 
-    if not docs:
+    pipeline = [
+        {"$match": match},
+        {"$facet": {
+            "stats": [{"$group": {
+                "_id":       None,
+                "count":     {"$sum": 1},
+                "avg_price": {"$avg": "$price"},
+                "min_price": {"$min": "$price"},
+                "max_price": {"$max": "$price"},
+            }}],
+            "top_makes": [
+                {"$match": {"make": {"$ne": None}}},
+                {"$group": {"_id": "$make", "count": {"$sum": 1}}},
+                {"$sort": {"count": -1}},
+                {"$limit": 5},
+                {"$project": {"_id": 0, "make": "$_id", "count": 1}},
+            ],
+            "fuel_dist": [
+                {"$match": {"fuel_type": {"$ne": None}}},
+                {"$group": {"_id": "$fuel_type", "count": {"$sum": 1}}},
+                {"$project": {"_id": 0, "fuel_type": "$_id", "count": 1}},
+            ],
+        }},
+    ]
+    agg_result = await col.aggregate(pipeline).to_list(length=1)
+
+    if not agg_result or not agg_result[0]["stats"]:
         raise HTTPException(status_code=404, detail="No active listings in database")
 
-    prices = np.array([d["price"] for d in docs if d.get("price") is not None])
+    facet = agg_result[0]
+    stats = facet["stats"][0]
 
-    make_counts: dict = {}
-    for d in docs:
-        m = d.get("make")
-        if m:
-            make_counts[m] = make_counts.get(m, 0) + 1
-    top_makes = [
-        {"make": m, "count": c}
-        for m, c in sorted(make_counts.items(), key=lambda x: -x[1])[:5]
-    ]
+    price_docs = await col.find(match, {"price": 1, "_id": 0}).to_list(length=10_000)
+    prices = np.array([d["price"] for d in price_docs])
 
-    fuel_counts: dict = {}
-    for d in docs:
-        f = d.get("fuel_type")
-        if f:
-            fuel_counts[f] = fuel_counts.get(f, 0) + 1
+    fuel_distribution = {entry["fuel_type"]: entry["count"] for entry in facet["fuel_dist"]}
 
     return {
-        "total_listings":    int(len(prices)),
-        "avg_price":         float(prices.mean()),
+        "total_listings":    int(stats["count"]),
+        "avg_price":         float(stats["avg_price"]),
         "median_price":      float(np.median(prices)),
-        "min_price":         float(prices.min()),
-        "max_price":         float(prices.max()),
-        "top_makes":         top_makes,
-        "fuel_distribution": fuel_counts,
+        "min_price":         float(stats["min_price"]),
+        "max_price":         float(stats["max_price"]),
+        "top_makes":         facet["top_makes"],
+        "fuel_distribution": fuel_distribution,
         "currency":          "LKR",
     }
 
@@ -218,6 +232,7 @@ async def market_stats():
 async def listings(
     make: str | None = Query(None),
     model: str | None = Query(None),
+    fuel_type: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     sort: Literal["price_asc", "price_desc", "newest"] = Query("newest"),
 ):
@@ -227,6 +242,10 @@ async def listings(
         query["make"] = make
     if model:
         query["model"] = model
+    if fuel_type:
+        query["fuel_type"] = fuel_type
+    if sort in ("price_asc", "price_desc"):
+        query["price"] = {"$ne": None}
 
     sort_field, sort_dir = {
         "price_asc":  ("price", 1),
@@ -247,6 +266,7 @@ async def listings(
             model=d.get("model"),
             year=d.get("year"),
             mileage=d.get("mileage"),
+            engine_cc=d.get("engine_cc"),
             price=d.get("price"),
             fuel_type=d.get("fuel_type"),
             transmission=d.get("transmission"),
@@ -264,7 +284,8 @@ async def predict(req: PredictRequest):
         raise HTTPException(status_code=503, detail="Model not loaded — run ml/train.py first")
 
     X = build_input(req)
-    price = float(np.exp(bundle["model"].predict(X)[0]))
+    raw_pred = float(bundle["model"].predict(X)[0])
+    price = float(np.expm1(raw_pred) if bundle.get("log_transform") else raw_pred)
 
     col = listings_col()
     raw_comps = await (
