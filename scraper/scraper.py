@@ -15,6 +15,10 @@ import random
 import argparse
 import os
 import logging
+from datetime import datetime, timezone
+
+from dotenv import load_dotenv
+from pymongo import MongoClient, UpdateOne
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -169,6 +173,42 @@ def scrape(num_pages: int = 10, detail_pages: bool = True) -> pd.DataFrame:
     df = pd.DataFrame(all_records)
     log.info(f"Scraping complete. Total records: {len(df)}")
     return df
+
+
+def save_to_mongo(records: list[dict]) -> int:
+    load_dotenv()
+    uri             = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+    db_name         = os.getenv("MONGO_DB", "price_prediction")
+    collection_name = os.getenv("MONGO_COLLECTION", "listings")
+
+    client = MongoClient(uri)
+    col    = client[db_name][collection_name]
+
+    now = datetime.now(timezone.utc)
+    ops = []
+    for record in records:
+        r = dict(record)
+        r["source"]    = "riyasewana"
+        r["last_seen"] = now
+        r["active"]    = True
+        if not r.get("url"):
+            continue
+        ops.append(UpdateOne({"url": r["url"]}, {"$set": r}, upsert=True))
+
+    if not ops:
+        client.close()
+        return 0
+
+    result = col.bulk_write(ops, ordered=False)
+    client.close()
+    log.info(f"riyasewana: {result.upserted_count} new / {result.modified_count} updated")
+    return result.upserted_count
+
+
+def run(pages: int = 50) -> int:
+    df = scrape(num_pages=pages, detail_pages=True)
+    new_inserts = save_to_mongo(df.to_dict("records"))
+    return new_inserts
 
 
 def main():

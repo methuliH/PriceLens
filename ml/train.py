@@ -74,7 +74,7 @@ def load_features(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, dict, list
 
 # ── Model training ─────────────────────────────────────────────────────────────
 
-def train(X_train, y_train) -> xgb.XGBRegressor:
+def _fit_xgb(X_train, y_train) -> xgb.XGBRegressor:
     model = xgb.XGBRegressor(
         n_estimators=500,
         learning_rate=0.05,
@@ -160,21 +160,19 @@ def plot_shap(model, X_test, out_dir: str):
     log.info(f"Saved SHAP plot -> {path}")
 
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# ── Pipeline (callable by scheduler) ──────────────────────────────────────────
 
-def main():
+def train(
+    input_csv: str  = "data/processed.csv",
+    model_out: str  = "models/price_model.joblib",
+    plot_dir:  str  = "outputs/plots",
+    test_size: float = 0.2,
+) -> dict:
+    """Run the full training pipeline and return evaluation metrics."""
     load_dotenv()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input",     default="data/processed.csv",
-                        help="CSV fallback path (used only when MONGO_URI is unset)")
-    parser.add_argument("--model-out", default="models/price_model.joblib")
-    parser.add_argument("--plot-dir",  default="outputs/plots")
-    parser.add_argument("--test-size", type=float, default=0.2)
-    args = parser.parse_args()
-
-    os.makedirs(os.path.dirname(args.model_out), exist_ok=True)
-    os.makedirs(args.plot_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(model_out), exist_ok=True)
+    os.makedirs(plot_dir, exist_ok=True)
 
     # ── Load data: MongoDB preferred, CSV fallback ────────────────────────────
     if os.getenv("MONGO_URI"):
@@ -182,13 +180,12 @@ def main():
             df = load_from_mongo()
             log.info(f"Loaded from MongoDB: {df.shape[0]} rows, {df.shape[1]} cols")
         except Exception as exc:
-            log.warning(f"MongoDB load failed ({exc}) -- falling back to CSV: {args.input}")
-            df = load_from_csv(args.input)
+            log.warning(f"MongoDB load failed ({exc}) -- falling back to CSV: {input_csv}")
+            df = load_from_csv(input_csv)
     else:
-        log.info(f"MONGO_URI not set -- loading from CSV: {args.input}")
-        df = load_from_csv(args.input)
+        log.info(f"MONGO_URI not set -- loading from CSV: {input_csv}")
+        df = load_from_csv(input_csv)
 
-    # Ensure model column exists (absent in CSV path)
     if "model" not in df.columns:
         df["model"] = "Unknown"
 
@@ -198,7 +195,7 @@ def main():
     # ── Pre-split index to compute group means without leakage ────────────────
     idx_all = list(range(len(df)))
     idx_train, idx_test = train_test_split(
-        idx_all, test_size=args.test_size, random_state=42
+        idx_all, test_size=test_size, random_state=42
     )
 
     train_slice = df.iloc[idx_train][["make", "model", "price"]].copy()
@@ -216,7 +213,6 @@ def main():
         f"(global mean: LKR {global_mean:,.0f})"
     )
 
-    # Apply to full df — test rows get training-set means (no leakage)
     _make  = df["make"].fillna("Unknown").astype(str)
     _model = df["model"].fillna("Unknown").astype(str)
     df["make_model_mean_price"] = [
@@ -248,28 +244,49 @@ def main():
 
     # ── Train final model ─────────────────────────────────────────────────────
     log.info("Training final model...")
-    model = train(X_train, y_log_train)
+    model = _fit_xgb(X_train, y_log_train)
 
     log_preds = model.predict(X_test)
     preds     = np.expm1(log_preds)
     metrics   = evaluate_raw(y_test, preds)
 
-    plot_predictions(y_test, preds, args.plot_dir)
-    plot_feature_importance(model, feature_cols, args.plot_dir)
-    plot_shap(model, X_test, args.plot_dir)
+    plot_predictions(y_test, preds, plot_dir)
+    plot_feature_importance(model, feature_cols, plot_dir)
+    plot_shap(model, X_test, plot_dir)
 
     # ── Save bundle ───────────────────────────────────────────────────────────
     bundle = {
         "model":             model,
-        "label_encoders":    label_encoders,   # includes "model" encoder
+        "label_encoders":    label_encoders,
         "feature_cols":      feature_cols,
         "metrics":           metrics,
         "log_transform":     True,
         "make_model_means":  make_model_means,
         "global_mean_price": global_mean,
     }
-    joblib.dump(bundle, args.model_out)
-    log.info(f"Model saved -> {args.model_out}")
+    joblib.dump(bundle, model_out)
+    log.info(f"Model saved -> {model_out}")
+
+    return metrics
+
+
+# ── Main ───────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input",     default="data/processed.csv",
+                        help="CSV fallback path (used only when MONGO_URI is unset)")
+    parser.add_argument("--model-out", default="models/price_model.joblib")
+    parser.add_argument("--plot-dir",  default="outputs/plots")
+    parser.add_argument("--test-size", type=float, default=0.2)
+    args = parser.parse_args()
+
+    train(
+        input_csv=args.input,
+        model_out=args.model_out,
+        plot_dir=args.plot_dir,
+        test_size=args.test_size,
+    )
 
 
 if __name__ == "__main__":

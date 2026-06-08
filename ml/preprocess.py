@@ -254,7 +254,7 @@ def load_from_mongo() -> pd.DataFrame:
     uri = os.getenv("MONGO_URI")
     if not uri:
         raise RuntimeError("MONGO_URI not set — add it to .env or environment")
-    db_name = os.getenv("DB_NAME", "pricelens")
+    db_name = os.getenv("MONGO_DB", "price_prediction")
 
     log.info("Loading data from MongoDB...")
     client = MongoClient(uri)
