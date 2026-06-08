@@ -454,6 +454,171 @@ nav {
   color: #991b1b;
 }
 
+/* ─── Listing cards grid ─── */
+.listings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 900px) {
+  .listings-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .listings-grid { grid-template-columns: 1fr; }
+}
+
+.listing-card {
+  background: var(--white);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  transition: border-color .2s, box-shadow .2s, transform .2s;
+}
+.listing-card:hover {
+  border-color: var(--amber);
+  box-shadow: 0 4px 16px rgba(0,0,0,.09);
+  transform: translateY(-2px);
+}
+
+.card-thumb {
+  width: 100%; height: 130px;
+  background: var(--slate-light);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.card-thumb svg {
+  width: 52px; height: 52px;
+  opacity: .35;
+}
+
+.card-body {
+  padding: 1rem 1rem .75rem;
+  display: flex; flex-direction: column; flex: 1;
+}
+
+.card-price {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-weight: 600;
+  color: var(--amber-dark);
+  letter-spacing: -.01em;
+  margin-bottom: .25rem;
+}
+
+.card-title {
+  font-size: 13px; color: var(--text-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: .6rem;
+}
+
+.card-pills {
+  display: flex; gap: .35rem; flex-wrap: wrap;
+  margin-bottom: .6rem;
+}
+.card-pill {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em;
+  color: var(--slate-dark);
+  background: var(--slate-light);
+  border: 1px solid var(--slate-mid);
+  padding: .2rem .55rem; border-radius: 20px;
+}
+
+.card-mileage {
+  font-size: 12px; color: var(--text-3);
+  font-family: 'DM Mono', monospace;
+  margin-bottom: auto;
+  padding-bottom: .75rem;
+}
+
+.card-btn {
+  display: block; width: 100%;
+  padding: .55rem 1rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 600;
+  text-align: center; text-decoration: none;
+  color: var(--text);
+  background: transparent;
+  border: 1.5px solid var(--border-2);
+  border-radius: var(--r-sm);
+  margin-top: .75rem;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.card-btn:hover {
+  border-color: var(--amber);
+  background: var(--amber-light);
+  color: var(--amber-dark);
+}
+
+/* ─── Comparables section ─── */
+.comparables-section {
+  margin-top: 2.5rem;
+}
+.comparables-section .section-row { margin-bottom: 1rem; }
+.comparables-empty {
+  font-size: 13px; color: var(--text-3);
+  font-style: italic; padding: .25rem 0;
+}
+
+/* ─── Browse section ─── */
+.section-divider {
+  height: 1px; background: var(--border-2);
+  margin: 3.5rem 0;
+}
+
+.browse-section { }
+
+.browse-controls {
+  display: flex; gap: .75rem; align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.browse-field { display: flex; flex-direction: column; gap: .35rem; }
+.browse-field label {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--slate);
+}
+.browse-select {
+  height: 42px; min-width: 180px;
+  padding: 0 2.5rem 0 1rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px; color: var(--text);
+  background: var(--white);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-sm);
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23767F9E' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.browse-select:focus {
+  outline: none;
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-light);
+}
+
+.btn-search {
+  height: 42px; padding: 0 1.5rem;
+  background: var(--text); color: var(--white);
+  border: none; border-radius: var(--r-sm);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .15s;
+  white-space: nowrap;
+}
+.btn-search:hover { background: var(--slate-dark); }
+.btn-search:disabled { opacity: .55; cursor: not-allowed; }
+
+.browse-message {
+  font-size: 13px; color: var(--text-3);
+  font-style: italic; padding: .5rem 0;
+}
+
 /* ─── Footer ─── */
 footer {
   margin-top: 5rem;
@@ -678,6 +843,49 @@ footer {
     </div>
 
   </div>
+
+  <!-- Part 1: Similar listings after prediction -->
+  <div class="comparables-section" id="comparables-section" style="display:none;">
+    <div class="section-row">
+      <span class="section-label">Similar Listings</span>
+      <div class="section-rule"></div>
+    </div>
+    <div id="comparables-container"></div>
+  </div>
+
+  <!-- Part 2: Browse Listings -->
+  <div class="section-divider"></div>
+
+  <div class="browse-section">
+    <div class="section-row">
+      <span class="section-label">Browse Listings</span>
+      <div class="section-rule"></div>
+    </div>
+
+    <div class="browse-controls">
+      <div class="browse-field">
+        <label for="browse-make">Make</label>
+        <select id="browse-make" class="browse-select">
+          <option value="">All Makes</option>
+        </select>
+      </div>
+      <div class="browse-field">
+        <label for="browse-fuel">Fuel Type</label>
+        <select id="browse-fuel" class="browse-select">
+          <option value="">All Types</option>
+          <option>Petrol</option>
+          <option>Diesel</option>
+          <option>Hybrid</option>
+          <option>Electric</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <button class="btn-search" id="browse-search-btn" onclick="searchBrowse()">Search</button>
+    </div>
+
+    <div id="browse-container"></div>
+  </div>
+
 </div>
 
 <footer>
@@ -686,7 +894,7 @@ footer {
 </footer>
 
 <script>
-const API = 'http://localhost:8000';
+const API_BASE = 'http://localhost:8000';
 
 // ── Condition value mapping (must match what preprocess.py normalizes to) ──
 const COND_MAP = {
@@ -696,6 +904,33 @@ const COND_MAP = {
   'brand_new':  'Brand New',
 };
 
+// ── Inline car SVG used in listing card thumbnails ──
+const CAR_SVG = `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M8 36l5-14h38l5 14" stroke="#767F9E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="4" y="36" width="56" height="14" rx="4" stroke="#767F9E" stroke-width="3"/>
+  <circle cx="16" cy="50" r="5" stroke="#767F9E" stroke-width="3"/>
+  <circle cx="48" cy="50" r="5" stroke="#767F9E" stroke-width="3"/>
+  <path d="M21 50h22" stroke="#767F9E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M16 36l4-10h24l4 10" stroke="#767F9E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+function escapeHTML(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeUrl(url) {
+  if (!url) return '#';
+  try {
+    const p = new URL(url);
+    return (p.protocol === 'http:' || p.protocol === 'https:') ? url : '#';
+  } catch { return '#'; }
+}
+
 function lkr(n) {
   if (n >= 1e6) return 'Rs. ' + (n / 1e6).toFixed(2) + 'M';
   return 'Rs. ' + Math.round(n).toLocaleString();
@@ -704,17 +939,74 @@ function lkrFull(n) {
   return 'Rs. ' + Math.round(n).toLocaleString();
 }
 
+// ── Reusable listing card renderer ───────────────────────────────────────────
+function renderListingCards(listings, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  if (!listings || listings.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const cards = listings.map(listing => {
+    const price = listing.price != null
+      ? 'Rs. ' + Math.round(listing.price).toLocaleString()
+      : 'Price N/A';
+
+    const title = listing.title || 'Unknown Vehicle';
+
+    const pills = [listing.fuel_type, listing.transmission, listing.condition]
+      .filter(Boolean)
+      .map(v => `<span class="card-pill">${escapeHTML(v)}</span>`)
+      .join('');
+
+    const mileage = listing.mileage != null
+      ? Math.round(listing.mileage).toLocaleString() + ' km'
+      : 'Mileage N/A';
+
+    const url = safeUrl(listing.url);
+    const safeTitle = escapeHTML(title);
+
+    return `
+      <div class="listing-card">
+        <div class="card-thumb">${CAR_SVG}</div>
+        <div class="card-body">
+          <div class="card-price">${price}</div>
+          <div class="card-title" title="${safeTitle}">${safeTitle}</div>
+          <div class="card-pills">${pills}</div>
+          <div class="card-mileage">${mileage}</div>
+          <a class="card-btn" href="${url}" target="_blank" rel="noopener noreferrer">View Listing →</a>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="listings-grid">${cards}</div>`;
+}
+
 // ── Populate makes dropdown from API ──────────────────────────────────────
 async function loadMakes() {
   try {
-    const res  = await fetch(`${API}/makes`);
+    const res  = await fetch(`${API_BASE}/makes`);
+    if (!res.ok) throw new Error();
     const data = await res.json();
-    const sel  = document.getElementById('make');
+
+    // Prediction form make dropdown
+    const sel = document.getElementById('make');
     sel.innerHTML = '<option value="">Select make</option>';
     data.makes.forEach(m => {
       const opt = document.createElement('option');
       opt.value = opt.textContent = m;
       sel.appendChild(opt);
+    });
+
+    // Browse section make dropdown
+    const browseSel = document.getElementById('browse-make');
+    browseSel.innerHTML = '<option value="">All Makes</option>';
+    data.makes.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = m;
+      browseSel.appendChild(opt);
     });
   } catch {
     // API not running — keep static fallback options silently
@@ -724,7 +1016,8 @@ async function loadMakes() {
 // ── Load market stats from API ────────────────────────────────────────────
 async function loadStats() {
   try {
-    const res  = await fetch(`${API}/market-stats`);
+    const res  = await fetch(`${API_BASE}/market-stats`);
+    if (!res.ok) throw new Error();
     const data = await res.json();
 
     if (data.avg_price)
@@ -756,7 +1049,7 @@ async function loadModels(make) {
   sel.innerHTML = '<option value="">Loading…</option>';
   sel.disabled = true;
   try {
-    const res = await fetch(`${API}/models/${encodeURIComponent(make)}`);
+    const res = await fetch(`${API_BASE}/models/${encodeURIComponent(make)}`);
     if (!res.ok) throw new Error();
     const data = await res.json();
     sel.innerHTML = '<option value="">Any model</option>';
@@ -787,18 +1080,20 @@ async function estimate() {
     return;
   }
 
-  // Show loading state
   const btn = document.querySelector('.btn-cta');
   btn.textContent = 'Estimating…';
   btn.disabled    = true;
 
+  // Clear comparables while waiting
+  clearComparables();
+
   try {
-    const res = await fetch(`${API}/predict`, {
+    const res = await fetch(`${API_BASE}/predict`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         make,
-        model_name:   modelName,
+        model:        modelName,
         year,
         mileage:      mile,
         fuel_type:    fuel,
@@ -819,13 +1114,83 @@ async function estimate() {
       fromAPI: true,
     });
 
+    renderComparables(data.comparables);
+
   } catch (err) {
-    // Fallback: show a clear message instead of crashing
     showAPIError();
+    clearComparables();
   } finally {
     btn.innerHTML = 'Estimate price <span class="btn-arrow">→</span>';
     btn.disabled  = false;
   }
+}
+
+// ── Render comparables below prediction ──────────────────────────────────
+function renderComparables(comparables) {
+  const section = document.getElementById('comparables-section');
+  const container = document.getElementById('comparables-container');
+
+  section.style.display = 'block';
+
+  if (!comparables || comparables.length === 0) {
+    container.innerHTML = '<p class="comparables-empty">No comparable listings found for this search.</p>';
+    return;
+  }
+
+  renderListingCards(comparables, 'comparables-container');
+}
+
+function clearComparables() {
+  const section = document.getElementById('comparables-section');
+  section.style.display = 'none';
+  document.getElementById('comparables-container').innerHTML = '';
+}
+
+// ── Browse listings ───────────────────────────────────────────────────────
+let _browseReqId = 0;
+
+async function loadBrowseListings(make, fuelType) {
+  const reqId = ++_browseReqId;
+  const container = document.getElementById('browse-container');
+  container.innerHTML = '<p class="browse-message">Loading listings…</p>';
+
+  try {
+    let url = `${API_BASE}/listings?limit=5&sort=price_asc`;
+    if (make)     url += `&make=${encodeURIComponent(make)}`;
+    if (fuelType) url += `&fuel_type=${encodeURIComponent(fuelType)}`;
+
+    const res = await fetch(url);
+    if (reqId !== _browseReqId) return;
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    const data = await res.json();
+    if (reqId !== _browseReqId) return;
+
+    const listings = Array.isArray(data) ? data : (data.listings || []);
+
+    if (listings.length === 0) {
+      container.innerHTML = '<p class="browse-message">No listings found. Try a different filter.</p>';
+      return;
+    }
+
+    renderListingCards(listings, 'browse-container');
+  } catch (err) {
+    if (reqId !== _browseReqId) return;
+    container.innerHTML = `<p class="browse-message">Could not load listings. Make sure the API is running: uvicorn api:app --reload --port 8000</p>`;
+  }
+}
+
+function searchBrowse() {
+  const make     = document.getElementById('browse-make').value;
+  const fuelType = document.getElementById('browse-fuel').value;
+  const btn      = document.getElementById('browse-search-btn');
+
+  btn.textContent = 'Searching…';
+  btn.disabled    = true;
+
+  loadBrowseListings(make, fuelType).finally(() => {
+    btn.textContent = 'Search';
+    btn.disabled    = false;
+  });
 }
 
 // ── Render result panel ───────────────────────────────────────────────────
@@ -834,7 +1199,6 @@ function renderResult({ price, low, high, make, year, mile, fuel, trans, cond, f
   document.getElementById('range-display').textContent =
     lkrFull(low) + '  –  ' + lkrFull(high);
 
-  // Confidence: API model gets fixed 72%, with variation by price range
   const conf = fromAPI
     ? Math.min(88, 65 + Math.round((1 - Math.min(price, 20e6) / 20e6) * 20))
     : 55;
@@ -843,7 +1207,6 @@ function renderResult({ price, low, high, make, year, mile, fuel, trans, cond, f
   }, 120);
   document.getElementById('conf-num').textContent = conf + '%';
 
-  // Price driver bars — heuristic visual only, SHAP would replace these
   const age = 2026 - year;
   const af  = Math.max(0.22, 1 - age * 0.056);
   const mf  = Math.max(0.48, 1 - (mile / 300000) * 0.46);
@@ -859,7 +1222,6 @@ function renderResult({ price, low, high, make, year, mile, fuel, trans, cond, f
   setD('fuel', FUEL_IMPACT[fuel] || 30, fuel);
   setD('cond', cond === 'unreg' ? 68 : 32, cond === 'unreg' ? 'Unreg' : 'Used');
 
-  // Insight badges
   const tags = [];
   if (fuel === 'Hybrid')        tags.push({ t: 'Hybrid premium +22%', up: true });
   if (fuel === 'Electric')      tags.push({ t: 'EV premium +35%', up: true });
@@ -927,6 +1289,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load live data from API on startup
   loadMakes();
   loadStats();
+
+  // Load initial browse listings on page load
+  loadBrowseListings('', '');
 });
 </script>
 </body>
