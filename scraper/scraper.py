@@ -7,42 +7,20 @@ Usage:
     python scraper.py --pages 20 --output data/raw_listings.csv
 """
 
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
-import time
-import random
 import argparse
-import os
 import logging
+import os
+import random
+import time
+
+import pandas as pd
+
+from scraper.utils import get_page
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-US,en;q=0.9",
-}
-
 BASE_URL = "https://riyasewana.com/search/cars"
-
-
-def get_page(url: str, retries: int = 3) -> BeautifulSoup | None:
-    """Fetch a page and return a BeautifulSoup object."""
-    for attempt in range(retries):
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=15)
-            resp.raise_for_status()
-            return BeautifulSoup(resp.text, "html.parser")
-        except requests.RequestException as e:
-            log.warning(f"Attempt {attempt + 1} failed for {url}: {e}")
-            time.sleep(2 ** attempt)  # exponential backoff
-    log.error(f"All retries failed for {url}")
-    return None
 
 
 def parse_listing_card(card) -> dict:
