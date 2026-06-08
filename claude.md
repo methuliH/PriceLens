@@ -89,7 +89,7 @@ PriceLens/
   "label_encoders": {"make": LabelEncoder, "location": LabelEncoder},
   "feature_cols":   [...],   # ordered list of feature names the model expects
   "metrics":        {"MAE": ..., "RMSE": ..., "R²": ..., "MAPE (%)": ...},
-  "log_transform":  True,    # predictions must be back-transformed with np.exp()
+  "log_transform":  True,    # predictions must be back-transformed with np.expm1() (trained on log1p)
 }
 ```
 

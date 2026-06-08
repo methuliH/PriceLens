@@ -12,8 +12,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME   = os.getenv("DB_NAME", "pricelens")
+MONGO_URI    = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+DB_NAME      = os.getenv("DB_NAME", "pricelens")
+CURRENT_YEAR = 2026
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ def main():
             "model":        None,          # not scraped yet — will be filled by scraper v2
             "variant":      None,
             "year":         year,
-            "age":          (2025 - year) if year else None,
+            "age":          (CURRENT_YEAR - year) if year else None,
             "mileage":      mileage,
             "price":        price,
             "fuel_type":    str(row["fuel_type"]).strip()    if not pd.isna(row.get("fuel_type"))    else None,

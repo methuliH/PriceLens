@@ -319,6 +319,6 @@ async def predict(req: PredictRequest):
         range_low=price * 0.88,
         range_high=price * 1.12,
         currency="LKR",
-        inputs_used=req.model_dump(),
+        inputs_used={**req.model_dump(), "make_model_mean_price": float(X["make_model_mean_price"].iloc[0]) if "make_model_mean_price" in X.columns else None},
         comparables=comparables,
     )

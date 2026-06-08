@@ -1,10 +1,13 @@
-.PHONY: scrape details preprocess train serve clean
+.PHONY: scrape details ikman preprocess train serve clean
 
 scrape:
 	python scraper/scraper.py --pages 20 --output data/raw_listings.csv
 
 details:
 	python scraper/scrape_details.py --input data/raw_listings.csv
+
+ikman:
+	python scraper/ikman_scraper.py --pages 20
 
 preprocess:
 	python ml/preprocess.py --input data/raw_listings.csv --output data/processed.csv
@@ -16,4 +19,4 @@ serve:
 	python -m uvicorn api:app --reload --port 8000
 
 clean:
-	del /q data\processed.csv models\price_model.joblib outputs\plots\*.png 2>nul || true
+	-del /q data\processed.csv models\price_model.joblib outputs\plots\*.png 2>nul

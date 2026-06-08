@@ -10,41 +10,17 @@ Usage:
     python scrape_details.py --input data/raw_listings.csv --batch 10 --pause 45
 """
 
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
-import time
-import random
 import argparse
 import logging
+import random
+import time
+
+import pandas as pd
+
+from scraper.utils import get_page
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    )
-}
-
-
-def get_page(url: str, retries: int = 3) -> BeautifulSoup | None:
-    for attempt in range(retries):
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=15)
-            if resp.status_code == 429:
-                wait = 60 * (attempt + 1)
-                log.warning(f"429 rate limit hit. Waiting {wait}s before retry...")
-                time.sleep(wait)
-                continue
-            resp.raise_for_status()
-            return BeautifulSoup(resp.text, "html.parser")
-        except requests.RequestException as e:
-            log.warning(f"Attempt {attempt + 1} failed: {e}")
-            time.sleep(5 * (attempt + 1))
-    return None
 
 
 def fetch_detail(url: str) -> dict:
