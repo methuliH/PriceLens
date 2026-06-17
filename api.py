@@ -70,6 +70,7 @@ class ComparableListing(BaseModel):
     transmission: str | None
     condition: str | None
     url: str | None
+    image_url: str | None = None
 
 
 class PredictResponse(BaseModel):
@@ -94,6 +95,7 @@ class ListingOut(BaseModel):
     condition: str | None
     location: str | None
     url: str | None
+    image_url: str | None = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -273,6 +275,7 @@ async def listings(
             condition=d.get("condition"),
             location=d.get("location"),
             url=d.get("url"),
+            image_url=d.get("image_url"),
         )
         for d in docs
     ]
@@ -292,7 +295,7 @@ async def predict(req: PredictRequest):
         col.find(
             {"is_active": True, "make": req.make, "price": {"$ne": None}},
             {"title": 1, "make": 1, "year": 1, "mileage": 1, "price": 1,
-             "fuel_type": 1, "transmission": 1, "condition": 1, "url": 1, "_id": 0},
+             "fuel_type": 1, "transmission": 1, "condition": 1, "url": 1, "image_url": 1, "_id": 0},
         )
         .sort("scraped_at", -1)
         .limit(5)
@@ -310,6 +313,7 @@ async def predict(req: PredictRequest):
             transmission=d.get("transmission"),
             condition=d.get("condition"),
             url=d.get("url"),
+            image_url=d.get("image_url"),
         )
         for d in raw_comps
     ]

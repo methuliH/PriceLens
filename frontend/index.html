@@ -492,6 +492,15 @@ nav {
   width: 52px; height: 52px;
   opacity: .35;
 }
+.card-thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+.card-svg-fb {
+  display: none;
+  width: 100%; height: 100%;
+  align-items: center; justify-content: center;
+}
 
 .card-body {
   padding: 1rem 1rem .75rem;
@@ -968,9 +977,13 @@ function renderListingCards(listings, containerId) {
     const url = safeUrl(listing.url);
     const safeTitle = escapeHTML(title);
 
+    const thumb = listing.image_url
+      ? `<img src="${escapeHTML(listing.image_url)}" alt="${safeTitle}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="card-svg-fb">${CAR_SVG}</span>`
+      : CAR_SVG;
+
     return `
       <div class="listing-card">
-        <div class="card-thumb">${CAR_SVG}</div>
+        <div class="card-thumb">${thumb}</div>
         <div class="card-body">
           <div class="card-price">${price}</div>
           <div class="card-title" title="${safeTitle}">${safeTitle}</div>

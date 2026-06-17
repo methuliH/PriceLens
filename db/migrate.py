@@ -114,7 +114,7 @@ def main():
             "location":     str(row["location"]).strip()     if not pd.isna(row.get("location"))     else None,
             "source":       "riyasewana",
             "url":          str(row["url"]).strip(),
-            "image_url":    None,
+            "image_url":    str(row["image_url"]).strip() if not pd.isna(row.get("image_url")) else None,
             "is_active":    True,
             "scraped_at":   now,
         }

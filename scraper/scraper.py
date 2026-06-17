@@ -37,6 +37,10 @@ def parse_listing_card(card) -> dict:
             data["title"] = link_tag.get("title", "").strip()
             data["url"]   = link_tag.get("href", "").strip()
 
+        # Thumbnail image
+        img = card.find("img")
+        data["image_url"] = img.get("src") if img else None
+
         # Price — div.v-card-price → "Rs. 6,690,000"
         price_tag = card.select_one(".v-card-price")
         data["price_raw"] = price_tag.get_text(strip=True) if price_tag else None
