@@ -37,9 +37,11 @@ def parse_listing_card(card) -> dict:
             data["title"] = link_tag.get("title", "").strip()
             data["url"]   = link_tag.get("href", "").strip()
 
-        # Thumbnail image
+        # Thumbnail image — normalise protocol-relative URLs (//…) to https
         img = card.find("img")
-        data["image_url"] = img.get("src") if img else None
+        if img:
+            src = img.get("src") or ""
+            data["image_url"] = ("https:" + src) if src.startswith("//") else src or None
 
         # Price — div.v-card-price → "Rs. 6,690,000"
         price_tag = card.select_one(".v-card-price")

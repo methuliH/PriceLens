@@ -59,6 +59,13 @@ def extract_make(title: str, known_makes: list[str]) -> str | None:
     return None
 
 
+def _normalise_url(raw) -> str | None:
+    if pd.isna(raw) or not raw:
+        return None
+    s = str(raw).strip()
+    return ("https:" + s) if s.startswith("//") else s or None
+
+
 # ── main ───────────────────────────────────────────────────────────────────────
 
 def main():
@@ -114,7 +121,7 @@ def main():
             "location":     str(row["location"]).strip()     if not pd.isna(row.get("location"))     else None,
             "source":       "riyasewana",
             "url":          str(row["url"]).strip(),
-            "image_url":    str(row["image_url"]).strip() if not pd.isna(row.get("image_url")) else None,
+            "image_url":    _normalise_url(row.get("image_url")),
             "is_active":    True,
             "scraped_at":   now,
         }
