@@ -21,7 +21,7 @@ PriceLens scrapes live listings from **riyasewana.com**, trains an **XGBoost** r
 
 ## Features
 
-- Scrapes 2,360+ riyasewana.com listings including detail-page enrichment for fuel type, transmission, and condition
+- Scrapes 3,500+ riyasewana.com listings; 2,360 of them have detail-page enrichment (fuel type, transmission, condition) and are used for training
 - XGBoost model trained on log-scale prices with 5-fold cross-validation and early stopping
 - Per-(make, model) mean price encoding as a target-leak-free feature
 - Predictions served with a **±12% confidence band** and up to 5 live comparable listings
@@ -166,7 +166,7 @@ Returns `503` if the model is not loaded. Returns `404` from `/market-stats` if 
 
 ## Model Performance
 
-Trained on **2,360 rows** with detail-page enrichment (fuel type, transmission, condition, engine cc).
+Trained on the **2,360 rows** (of 3,500+ scraped) that have detail-page enrichment (fuel type, transmission, condition, engine cc).
 
 | Metric | Value |
 |--------|-------|
